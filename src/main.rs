@@ -1,5 +1,5 @@
 #[derive(Debug, Clone)]
-enum Attribute {
+pub enum Attribute {
     Left,
     Right,
     NoValue,
@@ -7,8 +7,8 @@ enum Attribute {
 }
 
 #[derive(Debug, Clone)]
-struct Hypothesis {
-    attributes: Vec<Attribute>,
+pub struct Hypothesis {
+    pub attributes: Vec<Attribute>,
     output: bool,
 }
 
