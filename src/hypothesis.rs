@@ -36,6 +36,23 @@ impl Attribute {
             (Attribute::Value(left), Attribute::Value(right)) => left == right,
         }
     }
+
+    /// Return the most specific attribute that satisfies other whilst being the smallest
+    /// generalization of self
+    fn generalize(&self, other: &Self) -> Option<Self> {
+        // FIXME: May be wrong depending on knowledge of consistency
+        match (self, other) {
+            (a, b) if a == b => Some(a.clone()),
+            (Attribute::NoValue, Attribute::Any) => Some(Attribute::Any),
+            (Attribute::NoValue, Attribute::Value(v)) => Some(Attribute::Value(v.clone())),
+            (Attribute::Any, Attribute::NoValue) => None,
+            (Attribute::Any, Attribute::Value(_)) => None,
+            (Attribute::Value(_), Attribute::NoValue) => None,
+            (Attribute::Value(_), Attribute::Any) => Some(Attribute::Any),
+            (a, b) if a != b => Some(Attribute::Any),
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl FromStr for Attribute {
@@ -77,11 +94,28 @@ impl Hypothesis {
         debug_assert_eq!(self.attributes.len(), other.attributes.len());
 
         for (attribute, other_attribute) in self.attributes.iter().zip(other.attributes.iter()) {
+            // This condition needs to take into account the output - a negative example shouldn't
+            // invalidate all positive examples as it currently does.
+            // FIXME:
             if !attribute.is_consistent(other_attribute) {
                 return false;
             }
         }
         true
+    }
+
+    /// Return the most minimal generalization that is consistent with both hypotheses
+    pub fn generalize(&self, other: &Self) -> Option<Self> {
+        let attributes = self
+            .attributes
+            .iter()
+            .zip(other.attributes.iter())
+            .map(|(attribute, other_attribute)| attribute.generalize(other_attribute))
+            .collect::<Option<Vec<Attribute>>>()?;
+        Some(Self {
+            attributes,
+            is_positive: self.is_positive,
+        })
     }
 
     pub fn to_vec(self) -> Vec<String> {
@@ -95,6 +129,21 @@ impl Hypothesis {
         bytes.push(self.is_positive.to_string());
 
         bytes
+    }
+}
+
+impl Display for Hypothesis {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let attributes = self
+            .attributes
+            .iter()
+            .map(|h| h.to_string())
+            .collect::<Vec<String>>()
+            .join(", ");
+
+        let output = if self.is_positive { "Yes" } else { "No" };
+
+        f.write_str(&format!("{attributes} => {output}"))
     }
 }
 
