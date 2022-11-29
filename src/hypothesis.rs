@@ -46,10 +46,30 @@ impl Attribute {
             (Attribute::NoValue, Attribute::Any) => Some(Attribute::Any),
             (Attribute::NoValue, Attribute::Value(v)) => Some(Attribute::Value(v.clone())),
             (Attribute::Any, Attribute::NoValue) => None,
-            (Attribute::Any, Attribute::Value(_)) => None,
+            (Attribute::Any, Attribute::Value(_)) => Some(Attribute::Any),
             (Attribute::Value(_), Attribute::NoValue) => None,
             (Attribute::Value(_), Attribute::Any) => Some(Attribute::Any),
             (a, b) if a != b => Some(Attribute::Any),
+            _ => unreachable!(),
+        }
+    }
+
+    /// Return the most specific attribute that satisfies other whilst being the smallest
+    /// generalization of self
+    fn specialize(&self, other: &Self) -> Option<Vec<Self>> {
+        // FIXME: May be wrong depending on knowledge of consistency
+        match (self, other) {
+            (a, b) if a == b => Some(vec![a.clone()]),
+            (Attribute::NoValue, Attribute::Any) => None,
+            (Attribute::NoValue, Attribute::Value(v)) => Some(vec![Attribute::Value(v.clone())]),
+            (Attribute::Any, Attribute::NoValue) => Some(vec![Attribute::NoValue]),
+            (Attribute::Any, Attribute::Value(v)) => Some(vec![Attribute::Value(v.clone())]),
+            (Attribute::Value(_), Attribute::NoValue) => Some(vec![Attribute::NoValue]),
+            (Attribute::Value(_), Attribute::Any) => None,
+            (Attribute::Value(left), Attribute::Value(right)) if left != right => Some(vec![
+                Attribute::Value(left.clone()),
+                Attribute::Value(right.clone()),
+            ]),
             _ => unreachable!(),
         }
     }
@@ -93,6 +113,10 @@ impl Hypothesis {
     pub fn is_consistent(&self, other: &Self) -> bool {
         debug_assert_eq!(self.attributes.len(), other.attributes.len());
 
+        if self.is_positive != other.is_positive {
+            return true;
+        }
+
         for (attribute, other_attribute) in self.attributes.iter().zip(other.attributes.iter()) {
             // This condition needs to take into account the output - a negative example shouldn't
             // invalidate all positive examples as it currently does.
@@ -116,6 +140,25 @@ impl Hypothesis {
             attributes,
             is_positive: self.is_positive,
         })
+    }
+
+    /// Return the most minimal specialization that is consistent with both hypotheses
+    pub fn specialize(&self, other: &Self) -> Option<Vec<Self>> {
+        let mut hypotheses = vec![];
+        for (index, (attribute, other_attribute)) in self.attributes.iter().zip(other.attributes.iter()).enumerate() {
+            if let Some(specializations) = attribute.specialize(other_attribute) {
+                for specialization in specializations.into_iter() {
+                    let mut new_attributes = self.attributes.clone();
+                    new_attributes[index] = specialization;
+                    hypotheses.push(Hypothesis {
+                        attributes: new_attributes,
+                        is_positive: self.is_positive,
+                    })
+                }
+            }
+        }
+
+        Some(hypotheses)
     }
 
     pub fn to_vec(self) -> Vec<String> {

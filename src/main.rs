@@ -32,6 +32,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     for example in training_examples.into_iter() {
         println!("{specific_hypotheses:?}");
         println!("{general_hypotheses:?}");
+        println!("Training example: {example}");
         std::io::stdin().read_exact(&mut [0u8]).unwrap();
 
         info!("Processing training example: {example}");
@@ -46,8 +47,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         } else {
             // Remove any hypothesis that is inconsistent with d
             specific_hypotheses.retain(|hypothesis| hypothesis.is_consistent(&example));
+
+            general_hypotheses = general_hypotheses
+                .into_iter()
+                .flat_map(|hypothesis| hypothesis.specialize(&example).unwrap())
+                .collect();
         }
     }
+    println!("{specific_hypotheses:?}");
+    println!("{general_hypotheses:?}");
 
     Ok(())
 }
