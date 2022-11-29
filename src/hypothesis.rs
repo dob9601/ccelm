@@ -21,6 +21,23 @@ impl Display for Attribute {
     }
 }
 
+impl Attribute {
+    fn is_consistent(&self, other: &Self) -> bool {
+        // FIXME: May be wrong depending on knowledge of consistency
+        match (self, other) {
+            (Attribute::NoValue, Attribute::NoValue) => true,
+            (Attribute::NoValue, Attribute::Any) => false,
+            (Attribute::NoValue, Attribute::Value(_)) => false,
+            (Attribute::Any, Attribute::NoValue) => false,
+            (Attribute::Any, Attribute::Any) => true,
+            (Attribute::Any, Attribute::Value(_)) => true,
+            (Attribute::Value(_), Attribute::NoValue) => false,
+            (Attribute::Value(_), Attribute::Any) => true,
+            (Attribute::Value(left), Attribute::Value(right)) => left == right,
+        }
+    }
+}
+
 impl FromStr for Attribute {
     type Err = Infallible;
 
@@ -36,12 +53,37 @@ impl FromStr for Attribute {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Row {
+pub struct Hypothesis {
     pub attributes: Vec<Attribute>,
-    pub output: bool,
+    pub is_positive: bool,
 }
 
-impl Row {
+impl Hypothesis {
+    pub fn general(n_attributes: usize) -> Self {
+        Self {
+            attributes: vec![Attribute::Any; n_attributes],
+            is_positive: true,
+        }
+    }
+
+    pub fn specific(n_attributes: usize) -> Self {
+        Self {
+            attributes: vec![Attribute::NoValue; n_attributes],
+            is_positive: true,
+        }
+    }
+
+    pub fn is_consistent(&self, other: &Self) -> bool {
+        debug_assert_eq!(self.attributes.len(), other.attributes.len());
+
+        for (attribute, other_attribute) in self.attributes.iter().zip(other.attributes.iter()) {
+            if !attribute.is_consistent(other_attribute) {
+                return false;
+            }
+        }
+        true
+    }
+
     pub fn to_vec(self) -> Vec<String> {
         // Convert each of the attributes from Attribute type to a string
         let mut bytes: Vec<String> = self
@@ -50,13 +92,13 @@ impl Row {
             .map(|attribute| attribute.to_string())
             .collect();
 
-        bytes.push(self.output.to_string());
+        bytes.push(self.is_positive.to_string());
 
         bytes
     }
 }
 
-impl TryFrom<StringRecord> for Row {
+impl TryFrom<StringRecord> for Hypothesis {
     type Error = ParseBoolError;
 
     fn try_from(record: StringRecord) -> Result<Self, Self::Error> {
@@ -66,9 +108,9 @@ impl TryFrom<StringRecord> for Row {
             .map(|record| Attribute::from_str(record).unwrap()) // This unwrap is safe - all cases covered in Attribute enum
             .collect();
 
-        Ok(Row {
+        Ok(Hypothesis {
             attributes,
-            output: bool::from_str(record.get(record.len() - 1).unwrap())?,
+            is_positive: bool::from_str(record.get(record.len() - 1).unwrap())?,
         })
     }
 }
@@ -89,10 +131,10 @@ Col1,Col2,Col3,Col4,Col5,Col6,output
         for result in reader.records() {
             let result = result.expect("Deserialization to be successful");
 
-            let row = Row::try_from(result).unwrap();
+            let row = Hypothesis::try_from(result).unwrap();
             assert_eq!(
                 row,
-                Row {
+                Hypothesis {
                     attributes: vec![
                         Attribute::NoValue,
                         Attribute::Any,
@@ -101,7 +143,7 @@ Col1,Col2,Col3,Col4,Col5,Col6,output
                         Attribute::NoValue,
                         Attribute::Any,
                     ],
-                    output: true,
+                    is_positive: true,
                 }
             )
         }
@@ -109,13 +151,13 @@ Col1,Col2,Col3,Col4,Col5,Col6,output
 
     #[test]
     fn test_row_serialization() {
-        let row = Row {
+        let row = Hypothesis {
             attributes: vec![
                 Attribute::NoValue,
                 Attribute::Any,
                 Attribute::Value("Foo".to_string()),
             ],
-            output: true,
+            is_positive: true,
         };
         let mut writer = csv::Writer::from_writer(vec![]);
         writer.write_record(row.to_vec()).unwrap();
