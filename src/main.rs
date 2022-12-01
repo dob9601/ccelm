@@ -51,6 +51,12 @@ fn main() -> Result<(), Box<dyn Error>> {
             general_hypotheses = general_hypotheses
                 .into_iter()
                 .flat_map(|hypothesis| hypothesis.specialize(&example).unwrap())
+                .filter(|general_hypothesis| specific_hypotheses.iter().all(|specific_hypothesis| {
+                    match dbg!(general_hypothesis.partial_cmp(specific_hypothesis)) {
+                        Some(comparison) => !comparison.is_lt(),
+                        None => true,
+                    }
+                }))
                 .collect();
         }
     }

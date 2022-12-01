@@ -1,93 +1,10 @@
-use std::convert::Infallible;
+use std::cmp::Ordering;
 use std::fmt::Display;
 use std::str::{FromStr, ParseBoolError};
 
 use csv::StringRecord;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Attribute {
-    NoValue,
-    Any,
-    Value(String),
-}
-
-impl Display for Attribute {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Attribute::NoValue => f.write_str("∅"),
-            Attribute::Any => f.write_str("?"),
-            Attribute::Value(val) => f.write_str(val),
-        }
-    }
-}
-
-impl Attribute {
-    fn is_consistent(&self, other: &Self) -> bool {
-        // FIXME: May be wrong depending on knowledge of consistency
-        match (self, other) {
-            (Attribute::NoValue, Attribute::NoValue) => true,
-            (Attribute::NoValue, Attribute::Any) => false,
-            (Attribute::NoValue, Attribute::Value(_)) => false,
-            (Attribute::Any, Attribute::NoValue) => false,
-            (Attribute::Any, Attribute::Any) => true,
-            (Attribute::Any, Attribute::Value(_)) => true,
-            (Attribute::Value(_), Attribute::NoValue) => false,
-            (Attribute::Value(_), Attribute::Any) => true,
-            (Attribute::Value(left), Attribute::Value(right)) => left == right,
-        }
-    }
-
-    /// Return the most specific attribute that satisfies other whilst being the smallest
-    /// generalization of self
-    fn generalize(&self, other: &Self) -> Option<Self> {
-        // FIXME: May be wrong depending on knowledge of consistency
-        match (self, other) {
-            (a, b) if a == b => Some(a.clone()),
-            (Attribute::NoValue, Attribute::Any) => Some(Attribute::Any),
-            (Attribute::NoValue, Attribute::Value(v)) => Some(Attribute::Value(v.clone())),
-            (Attribute::Any, Attribute::NoValue) => None,
-            (Attribute::Any, Attribute::Value(_)) => Some(Attribute::Any),
-            (Attribute::Value(_), Attribute::NoValue) => None,
-            (Attribute::Value(_), Attribute::Any) => Some(Attribute::Any),
-            (a, b) if a != b => Some(Attribute::Any),
-            _ => unreachable!(),
-        }
-    }
-
-    /// Return the most specific attribute that satisfies other whilst being the smallest
-    /// generalization of self
-    fn specialize(&self, other: &Self) -> Option<Vec<Self>> {
-        // FIXME: May be wrong depending on knowledge of consistency
-        match (self, other) {
-            (a, b) if a == b => Some(vec![a.clone()]),
-            (Attribute::NoValue, Attribute::Any) => None,
-            (Attribute::NoValue, Attribute::Value(v)) => Some(vec![Attribute::Value(v.clone())]),
-            (Attribute::Any, Attribute::NoValue) => Some(vec![Attribute::NoValue]),
-            (Attribute::Any, Attribute::Value(v)) => Some(vec![Attribute::Value(v.clone())]),
-            (Attribute::Value(_), Attribute::NoValue) => Some(vec![Attribute::NoValue]),
-            (Attribute::Value(_), Attribute::Any) => None,
-            (Attribute::Value(left), Attribute::Value(right)) if left != right => Some(vec![
-                Attribute::Value(left.clone()),
-                Attribute::Value(right.clone()),
-            ]),
-            _ => unreachable!(),
-        }
-    }
-}
-
-impl FromStr for Attribute {
-    type Err = Infallible;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == "∅" {
-            Ok(Self::NoValue)
-        } else if s == "?" {
-            Ok(Self::Any)
-        } else {
-            Ok(Self::Value(s.to_string()))
-        }
-    }
-}
+use crate::attribute::Attribute;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Hypothesis {
@@ -145,7 +62,13 @@ impl Hypothesis {
     /// Return the most minimal specialization that is consistent with both hypotheses
     pub fn specialize(&self, other: &Self) -> Option<Vec<Self>> {
         let mut hypotheses = vec![];
-        for (index, (attribute, other_attribute)) in self.attributes.iter().zip(other.attributes.iter()).enumerate() {
+        // FIXME: RESUME HERE
+        for (index, (attribute, other_attribute)) in self
+            .attributes
+            .iter()
+            .zip(other.attributes.iter())
+            .enumerate()
+        {
             if let Some(specializations) = attribute.specialize(other_attribute) {
                 for specialization in specializations.into_iter() {
                     let mut new_attributes = self.attributes.clone();
@@ -175,6 +98,37 @@ impl Hypothesis {
     }
 }
 
+/// Implement a partial ordering for hypotheses in terms of generality - i.e. the more
+/// general hypothesis is ranked higher.
+///
+/// Machine Learning by Tom Mitchell defines the generality/specificity ordering of hypotheses
+/// as:
+/// $$
+/// (\forall x \in X)[(h_k(x)=1)\implies (h_j(x)=1)]
+/// $$
+/// For $h_k$ to be more specific than $h_j$, if $h_j$ satisfies a hypothesis, $h_k$ must also do so
+///
+/// Therefore, if every attribute in hypothesis $h_k$ is more specific than that of $h_j$, it
+/// itself must be more specific
+impl PartialOrd for Hypothesis {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        let orderings: Vec<Ordering> = self
+            .attributes
+            .iter()
+            .zip(other.attributes.iter())
+            .map(|(attribute, other_attribute)| attribute.cmp(other_attribute))
+            .collect();
+
+        if orderings.iter().all(|ordering| ordering.is_ge()) {
+            Some(Ordering::Greater)
+        } else if orderings.iter().all(|ordering| ordering.is_le()) {
+            Some(Ordering::Less)
+        } else {
+            None
+        }
+    }
+}
+
 impl Display for Hypothesis {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let attributes = self
@@ -186,7 +140,7 @@ impl Display for Hypothesis {
 
         let output = if self.is_positive { "Yes" } else { "No" };
 
-        f.write_str(&format!("{attributes} => {output}"))
+        f.write_str(&format!("⟨{attributes}⟩ => {output}"))
     }
 }
 
@@ -203,6 +157,25 @@ impl TryFrom<StringRecord> for Hypothesis {
         Ok(Hypothesis {
             attributes,
             is_positive: bool::from_str(record.get(record.len() - 1).unwrap())?,
+        })
+    }
+}
+
+impl FromStr for Hypothesis {
+    type Err = ParseBoolError;
+
+    fn from_str(record: &str) -> Result<Self, Self::Err> {
+        let record: Vec<&str> = record.split(',').map(|str| str.trim()).collect();
+        let attributes: Vec<Attribute> = record[..record.len() - 1]
+            .iter()
+            .map(|record| Attribute::from_str(record).unwrap()) // This unwrap is safe - all cases covered in Attribute enum
+            .collect();
+
+        let is_positive = bool::from_str(record.last().unwrap())?;
+
+        Ok(Hypothesis {
+            attributes,
+            is_positive,
         })
     }
 }
@@ -260,5 +233,30 @@ Col1,Col2,Col3,Col4,Col5,Col6,output
             .to_string();
 
         assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_hypothesis_generality_extremes() {
+        let most_general = Hypothesis::from_str("?,?,?,?,?,true").unwrap();
+        let most_specific = Hypothesis::from_str("∅,∅,∅,∅,∅,true").unwrap();
+        assert!(most_general > most_specific);
+    }
+
+    #[test]
+    fn test_hypothesis_generality() {
+        let specific = Hypothesis::from_str("Foo,?,Bar,?,Baz,true").unwrap();
+        let general = Hypothesis::from_str("Foo,?,?,?,Baz,true").unwrap();
+        assert!(general > specific);
+    }
+
+    #[test]
+    fn test_hypothesis_generality_no_ordering() {
+        let specific = Hypothesis::from_str("Foo,?,Bar,?,Baz,true").unwrap();
+
+        // Edge case, 3rd attribute is more general - 5th is more specific
+        let general = Hypothesis::from_str("Foo,?,?,?,∅,true").unwrap();
+
+        // Neither hypothesis is more or less general in this case
+        assert!(general.partial_cmp(&specific).is_none());
     }
 }
