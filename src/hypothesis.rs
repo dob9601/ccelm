@@ -1,4 +1,3 @@
-use std::cmp::Ordering;
 use std::fmt::Display;
 use std::str::{FromStr, ParseBoolError};
 
@@ -35,6 +34,18 @@ impl Hypothesis {
             .all(|(attribute, other_attribute)| other_attribute <= attribute)
     }
 
+    /// Implement a partial ordering for hypotheses in terms of generality - i.e. the more
+    /// general hypothesis is ranked higher.
+    ///
+    /// Machine Learning by Tom Mitchell defines the generality/specificity ordering of hypotheses
+    /// as:
+    /// $$
+    /// (\forall x \in X)[(h_k(x)=1)\implies (h_j(x)=1)]
+    /// $$
+    /// For $h_k$ to be more specific than $h_j$, if $h_j$ satisfies a hypothesis, $h_k$ must also do so
+    ///
+    /// Therefore, if every attribute in hypothesis $h_k$ is more specific than that of $h_j$, it
+    /// itself must be more specific
     pub fn is_more_general(&self, other: &Self) -> bool {
         self.attributes
             .iter()
@@ -109,37 +120,6 @@ impl Hypothesis {
     }
 }
 
-/// Implement a partial ordering for hypotheses in terms of generality - i.e. the more
-/// general hypothesis is ranked higher.
-///
-/// Machine Learning by Tom Mitchell defines the generality/specificity ordering of hypotheses
-/// as:
-/// $$
-/// (\forall x \in X)[(h_k(x)=1)\implies (h_j(x)=1)]
-/// $$
-/// For $h_k$ to be more specific than $h_j$, if $h_j$ satisfies a hypothesis, $h_k$ must also do so
-///
-/// Therefore, if every attribute in hypothesis $h_k$ is more specific than that of $h_j$, it
-/// itself must be more specific
-impl PartialOrd for Hypothesis {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        let orderings: Vec<Ordering> = self
-            .attributes
-            .iter()
-            .zip(other.attributes.iter())
-            .map(|(attribute, other_attribute)| attribute.cmp(other_attribute))
-            .collect();
-
-        if orderings.iter().all(|ordering| ordering.is_ge()) {
-            Some(Ordering::Greater)
-        } else if orderings.iter().all(|ordering| ordering.is_le()) {
-            Some(Ordering::Less)
-        } else {
-            None
-        }
-    }
-}
-
 impl Display for Hypothesis {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let attributes = self
@@ -185,25 +165,10 @@ mod tests {
     }
 
     #[test]
-    fn test_hypothesis_generality_extremes() {
-        let most_general = Hypothesis::from_str("?,?,?,?,?").unwrap();
-        let most_specific = Hypothesis::from_str("∅,∅,∅,∅,∅").unwrap();
-        assert!(most_general > most_specific);
-    }
-
-    #[test]
-    fn test_hypothesis_generality() {
-        let specific = Hypothesis::from_str("Foo,?,Bar,?,Baz").unwrap();
-        let general = Hypothesis::from_str("Foo,?,?,?,Baz").unwrap();
-        assert!(general > specific);
-    }
-
-    #[test]
     fn test_hypothesis_generality_book_example() {
         let hypothesis = Hypothesis::from_str("?,?,Normal,?,?,?").unwrap();
         let other = Hypothesis::from_str("Sunny,Warm,?,Strong,Warm,Same").unwrap();
         assert!(!hypothesis.is_more_general(&other));
-        //assert!(general.partial_cmp(&specific) == Some(Ordering::Greater));
     }
 
     #[test]
@@ -211,7 +176,6 @@ mod tests {
         let hypothesis = Hypothesis::from_str("Sunny,?,?,?,?,?").unwrap();
         let other = Hypothesis::from_str("Sunny,Warm,?,Strong,Warm,Same").unwrap();
         assert!(hypothesis.is_more_general(&other));
-        //assert!(general.partial_cmp(&specific) == Some(Ordering::Greater));
     }
 
     #[test]
@@ -219,18 +183,6 @@ mod tests {
         let hypothesis = Hypothesis::from_str("?,?,?,Weak,?,?").unwrap();
         let other = Hypothesis::from_str("Sunny,Warm,?,Strong,Warm,Same").unwrap();
         assert!(!hypothesis.is_more_general(&other));
-        //assert!(general.partial_cmp(&specific) == Some(Ordering::Greater));
-    }
-
-    #[test]
-    fn test_hypothesis_generality_no_ordering() {
-        let specific = Hypothesis::from_str("Foo,?,Bar,?,Baz,true").unwrap();
-
-        // Edge case, 3rd attribute is more general - 5th is more specific
-        let general = Hypothesis::from_str("Foo,?,?,?,∅,true").unwrap();
-
-        // Neither hypothesis is more or less general in this case
-        assert!(general.partial_cmp(&specific).is_none());
     }
 
     #[test]
