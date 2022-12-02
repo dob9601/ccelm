@@ -1,8 +1,8 @@
 use std::error::Error;
 use std::io::Read;
 
-use ccelm::Hypothesis;
 use ccelm::Cli;
+use ccelm::Hypothesis;
 use ccelm::TrainingExample;
 use clap::Parser;
 use log::info;
@@ -28,7 +28,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let attribute_length = training_examples[0].attributes.len();
 
-    // FIXME: Most examples treat this as a single value rather than a vec, double check? book
+    // PERF: Most examples treat this as a single value rather than a vec, double check? book
     // implies otherwise
     let mut specific_hypothesis = Hypothesis::specific(attribute_length);
     let mut general_hypotheses = vec![Hypothesis::general(attribute_length)];
@@ -51,13 +51,16 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             general_hypotheses = general_hypotheses
                 .into_iter()
-                // TODO: Technically should append original hypothesis here and not just map it
-                .flat_map(|hypothesis| hypothesis.specialize(&example, column_data.as_slice()).unwrap())
+                // PERF: Technically should append original hypothesis here and not just map it. At
+                // the same time, specializing a hypothesis should render the other one more
+                // general
+                .flat_map(|hypothesis| {
+                    hypothesis
+                        .specialize(&example, column_data.as_slice())
+                        .unwrap()
+                })
                 .filter(|general_hypothesis| {
-                    match general_hypothesis.partial_cmp(&specific_hypothesis) {
-                        Some(comparison) => !comparison.is_lt(),
-                        None => true,
-                    }
+                    dbg!(dbg!(general_hypothesis).is_more_general(&specific_hypothesis))
                 })
                 .collect();
         }

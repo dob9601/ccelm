@@ -1,5 +1,5 @@
 sky,air_temp,humidity,wind,water,forecast,enjoy_sport
-sunny,warm,normal,strong,warm,same,true
-sunny,warm,high,strong,warm,same,true
-rainy,cold,high,strong,warm,change,false
-sunny,warm,high,strong,cool,change,true
+Sunny,Warm,Normal,Strong,Warm,Same,true
+Sunny,Warm,High,Strong,Warm,Same,true
+Rainy,Cold,High,Strong,Warm,Change,false
+Sunny,Warm,High,Strong,Cool,Change,true

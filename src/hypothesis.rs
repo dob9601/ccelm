@@ -35,6 +35,21 @@ impl Hypothesis {
             .all(|(attribute, other_attribute)| other_attribute <= attribute)
     }
 
+    pub fn is_more_general(&self, other: &Self) -> bool {
+        self.attributes
+            .iter()
+            .zip(other.attributes.iter())
+            .all(|(attribute, other_attribute)| {
+                if let (Attribute::Value(left), Attribute::Value(right)) =
+                    (attribute, other_attribute)
+                {
+                    left == right
+                } else {
+                    attribute >= other_attribute
+                }
+            })
+    }
+
     // FIXME: Replace this with a classify function. Hypothesis is consistent if it correctly
     // classifies the other hypothesis
     pub fn is_consistent(&self, training_example: &TrainingExample) -> bool {
@@ -171,16 +186,40 @@ mod tests {
 
     #[test]
     fn test_hypothesis_generality_extremes() {
-        let most_general = Hypothesis::from_str("?,?,?,?,?,true").unwrap();
-        let most_specific = Hypothesis::from_str("∅,∅,∅,∅,∅,true").unwrap();
+        let most_general = Hypothesis::from_str("?,?,?,?,?").unwrap();
+        let most_specific = Hypothesis::from_str("∅,∅,∅,∅,∅").unwrap();
         assert!(most_general > most_specific);
     }
 
     #[test]
     fn test_hypothesis_generality() {
-        let specific = Hypothesis::from_str("Foo,?,Bar,?,Baz,true").unwrap();
-        let general = Hypothesis::from_str("Foo,?,?,?,Baz,true").unwrap();
+        let specific = Hypothesis::from_str("Foo,?,Bar,?,Baz").unwrap();
+        let general = Hypothesis::from_str("Foo,?,?,?,Baz").unwrap();
         assert!(general > specific);
+    }
+
+    #[test]
+    fn test_hypothesis_generality_book_example() {
+        let hypothesis = Hypothesis::from_str("?,?,Normal,?,?,?").unwrap();
+        let other = Hypothesis::from_str("Sunny,Warm,?,Strong,Warm,Same").unwrap();
+        assert!(!hypothesis.is_more_general(&other));
+        //assert!(general.partial_cmp(&specific) == Some(Ordering::Greater));
+    }
+
+    #[test]
+    fn test_hypothesis_generality_book_example_2() {
+        let hypothesis = Hypothesis::from_str("Sunny,?,?,?,?,?").unwrap();
+        let other = Hypothesis::from_str("Sunny,Warm,?,Strong,Warm,Same").unwrap();
+        assert!(hypothesis.is_more_general(&other));
+        //assert!(general.partial_cmp(&specific) == Some(Ordering::Greater));
+    }
+
+    #[test]
+    fn test_hypothesis_generality_book_example_3() {
+        let hypothesis = Hypothesis::from_str("?,?,?,Weak,?,?").unwrap();
+        let other = Hypothesis::from_str("Sunny,Warm,?,Strong,Warm,Same").unwrap();
+        assert!(!hypothesis.is_more_general(&other));
+        //assert!(general.partial_cmp(&specific) == Some(Ordering::Greater));
     }
 
     #[test]
