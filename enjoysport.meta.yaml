@@ -2,6 +2,7 @@ columns:
   -
     - Sunny
     - Rainy
+    - Cloudy
   -
     - Warm
     - Cold

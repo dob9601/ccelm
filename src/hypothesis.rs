@@ -31,7 +31,15 @@ impl Hypothesis {
         self.attributes
             .iter()
             .zip(training_example.attributes.iter())
-            .all(|(attribute, other_attribute)| other_attribute <= attribute)
+            .all(|(attribute, other_attribute)| {
+                if let (Attribute::Value(left), Attribute::Value(right)) =
+                    (attribute, other_attribute)
+                {
+                    left == right
+                } else {
+                    other_attribute <= attribute
+                }
+            })
     }
 
     /// Implement a partial ordering for hypotheses in terms of generality - i.e. the more
@@ -54,6 +62,8 @@ impl Hypothesis {
                 if let (Attribute::Value(left), Attribute::Value(right)) =
                     (attribute, other_attribute)
                 {
+                    // If both are values, can only be more general (or equal) if attributes are
+                    // the same
                     left == right
                 } else {
                     attribute >= other_attribute
@@ -268,5 +278,13 @@ mod tests {
             dbg!(hypothesis.specialize(&specializer, &value_data).unwrap()),
             specialized_hypotheses
         )
+    }
+
+    #[test]
+    fn test_is_consistent_book_example() {
+        let hypothesis = Hypothesis::from_str("?,?,?,?,?,Same").unwrap();
+        let training_example =
+            TrainingExample::from_str("Sunny,Warm,High,Strong,Cool,Change,true").unwrap();
+        assert!(!hypothesis.is_consistent(&training_example));
     }
 }

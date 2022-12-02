@@ -34,10 +34,15 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut general_hypotheses = vec![Hypothesis::general(attribute_length)];
 
     for example in training_examples.into_iter() {
-        println!("{specific_hypothesis}");
-        println!("{general_hypotheses:?}");
-        println!("Training example: {example}");
-        std::io::stdin().read_exact(&mut [0u8]).unwrap();
+        println!("Specific Boundary {specific_hypothesis}");
+        println!(
+            "General Boundary {:?}",
+            general_hypotheses
+                .iter()
+                .map(|h| h.to_string())
+                .collect::<Vec<String>>()
+        );
+        println!("Training example: {example}\n");
 
         info!("Processing training example: {example}");
         if example.is_positive {
@@ -60,13 +65,19 @@ fn main() -> Result<(), Box<dyn Error>> {
                         .unwrap()
                 })
                 .filter(|general_hypothesis| {
-                    dbg!(dbg!(general_hypothesis).is_more_general(&specific_hypothesis))
+                    general_hypothesis.is_more_general(&specific_hypothesis)
                 })
                 .collect();
         }
     }
-    println!("{specific_hypothesis:?}");
-    println!("{general_hypotheses:?}");
+    println!("Specific Boundary {specific_hypothesis}");
+    println!(
+        "General Boundary {:?}",
+        general_hypotheses
+            .iter()
+            .map(|h| h.to_string())
+            .collect::<Vec<String>>()
+    );
 
     Ok(())
 }
