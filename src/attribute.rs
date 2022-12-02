@@ -40,12 +40,17 @@ impl Attribute {
     }
 
     /// Return the most specific attribute that satisfies other whilst being the smallest
-    /// generalization of self. Only works if hypothesis is positive
+    /// generalization of self.
+    ///
+    /// # Returns
+    /// Some attribute if the attribute can be further generalized by the provided attribute. Else,
+    /// none
     pub fn generalize(&self, other: &Self) -> Option<Self> {
-        // FIXME: May be wrong depending on knowledge of consistency
         match (self, other) {
             (a, b) if a == b => Some(a.clone()),
             (Attribute::NoValue, Attribute::Any) => Some(Attribute::Any),
+            // FIXME: For this to work when there are more than 2 attribute values, should
+            // generalize to every possible combination
             (Attribute::NoValue, Attribute::Value(v)) => Some(Attribute::Value(v.clone())),
             (Attribute::Any, Attribute::NoValue) => None,
             (Attribute::Any, Attribute::Value(_)) => Some(Attribute::Any),
@@ -58,14 +63,16 @@ impl Attribute {
 
     /// Return the most specific attribute that satisfies other whilst being the smallest
     /// generalization of self. Only works if hypothesis is negative
+    ///
+    /// Some attribute if the attribute can be further specialized by the provided attribute. Else,
+    /// none
     pub fn specialize(&self, other: &Self, possible_values: &[String]) -> Option<Vec<Self>> {
-        // FIXME: May be wrong depending on knowledge of consistency
         match (self, other) {
             (a, b) if a == b => Some(vec![a.clone()]),
             (Attribute::NoValue, _) => None, // NoValue cannot be specialized further
             (Attribute::Any, Attribute::NoValue) => Some(vec![Attribute::NoValue]),
             (Attribute::Any, Attribute::Value(v)) => Some(
-                possible_values // FIXME: RESUME HERE - FILTER NOT FILTERING
+                possible_values
                     .iter()
                     .cloned()
                     .filter(|new_value| new_value != v)
