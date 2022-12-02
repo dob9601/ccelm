@@ -2,80 +2,81 @@ use std::cmp::Ordering;
 use std::fmt::Display;
 use std::str::{FromStr, ParseBoolError};
 
-use csv::StringRecord;
-
 use crate::attribute::Attribute;
+use crate::training_example::TrainingExample;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Hypothesis {
     pub attributes: Vec<Attribute>,
-    pub is_positive: bool,
 }
 
+// FIXME: Should hypothesis be renamed to training example? Actual hypotheses all seem to be true
 impl Hypothesis {
     pub fn general(n_attributes: usize) -> Self {
         Self {
             attributes: vec![Attribute::Any; n_attributes],
-            is_positive: true,
         }
     }
 
     pub fn specific(n_attributes: usize) -> Self {
         Self {
             attributes: vec![Attribute::NoValue; n_attributes],
-            is_positive: true,
         }
     }
 
-    pub fn is_consistent(&self, other: &Self) -> bool {
-        debug_assert_eq!(self.attributes.len(), other.attributes.len());
+    pub fn classify(&self, training_example: &TrainingExample) -> bool {
+        debug_assert_eq!(self.attributes.len(), training_example.attributes.len());
 
-        if self.is_positive != other.is_positive {
-            return true;
-        }
+        // TODO: Take into account training example is_positive
 
-        for (attribute, other_attribute) in self.attributes.iter().zip(other.attributes.iter()) {
-            // This condition needs to take into account the output - a negative example shouldn't
-            // invalidate all positive examples as it currently does.
-            // FIXME:
-            if !attribute.is_consistent(other_attribute) {
-                return false;
-            }
-        }
-        true
+        self.attributes
+            .iter()
+            .zip(training_example.attributes.iter())
+            .all(|(attribute, other_attribute)| other_attribute <= attribute)
     }
 
-    /// Return the most minimal generalization that is consistent with both hypotheses
-    pub fn generalize(&self, other: &Self) -> Option<Self> {
+    // FIXME: Replace this with a classify function. Hypothesis is consistent if it correctly
+    // classifies the other hypothesis
+    pub fn is_consistent(&self, training_example: &TrainingExample) -> bool {
+        debug_assert_eq!(self.attributes.len(), training_example.attributes.len());
+
+        let classification = self.classify(training_example);
+        classification == training_example.is_positive
+    }
+
+    /// Return the most minimal generalization that is consistent with the new training example
+    pub fn generalize(&self, training_example: &TrainingExample) -> Option<Self> {
         let attributes = self
             .attributes
             .iter()
-            .zip(other.attributes.iter())
+            .zip(training_example.attributes.iter())
             .map(|(attribute, other_attribute)| attribute.generalize(other_attribute))
             .collect::<Option<Vec<Attribute>>>()?;
-        Some(Self {
-            attributes,
-            is_positive: self.is_positive,
-        })
+        Some(Self { attributes })
     }
 
     /// Return the most minimal specialization that is consistent with both hypotheses
-    pub fn specialize(&self, other: &Self) -> Option<Vec<Self>> {
+    pub fn specialize(
+        &self,
+        training_example: &TrainingExample,
+        value_data: &[Vec<String>],
+    ) -> Option<Vec<Self>> {
         let mut hypotheses = vec![];
         // FIXME: RESUME HERE
         for (index, (attribute, other_attribute)) in self
             .attributes
             .iter()
-            .zip(other.attributes.iter())
+            .zip(training_example.attributes.iter())
             .enumerate()
         {
-            if let Some(specializations) = attribute.specialize(other_attribute) {
+            if let Some(specializations) =
+                attribute.specialize(other_attribute, value_data[index].as_slice())
+            {
                 for specialization in specializations.into_iter() {
                     let mut new_attributes = self.attributes.clone();
                     new_attributes[index] = specialization;
                     hypotheses.push(Hypothesis {
                         attributes: new_attributes,
-                        is_positive: self.is_positive,
                     })
                 }
             }
@@ -86,15 +87,10 @@ impl Hypothesis {
 
     pub fn to_vec(self) -> Vec<String> {
         // Convert each of the attributes from Attribute type to a string
-        let mut bytes: Vec<String> = self
-            .attributes
+        self.attributes
             .into_iter()
             .map(|attribute| attribute.to_string())
-            .collect();
-
-        bytes.push(self.is_positive.to_string());
-
-        bytes
+            .collect()
     }
 }
 
@@ -138,26 +134,7 @@ impl Display for Hypothesis {
             .collect::<Vec<String>>()
             .join(", ");
 
-        let output = if self.is_positive { "Yes" } else { "No" };
-
-        f.write_str(&format!("⟨{attributes}⟩ => {output}"))
-    }
-}
-
-impl TryFrom<StringRecord> for Hypothesis {
-    type Error = ParseBoolError;
-
-    fn try_from(record: StringRecord) -> Result<Self, Self::Error> {
-        let attributes: Vec<Attribute> = record
-            .iter()
-            .take(record.len() - 1)
-            .map(|record| Attribute::from_str(record).unwrap()) // This unwrap is safe - all cases covered in Attribute enum
-            .collect();
-
-        Ok(Hypothesis {
-            attributes,
-            is_positive: bool::from_str(record.get(record.len() - 1).unwrap())?,
-        })
+        f.write_str(&format!("⟨{attributes}⟩"))
     }
 }
 
@@ -166,73 +143,30 @@ impl FromStr for Hypothesis {
 
     fn from_str(record: &str) -> Result<Self, Self::Err> {
         let record: Vec<&str> = record.split(',').map(|str| str.trim()).collect();
-        let attributes: Vec<Attribute> = record[..record.len() - 1]
+        let attributes: Vec<Attribute> = record
             .iter()
             .map(|record| Attribute::from_str(record).unwrap()) // This unwrap is safe - all cases covered in Attribute enum
             .collect();
 
-        let is_positive = bool::from_str(record.last().unwrap())?;
-
-        Ok(Hypothesis {
-            attributes,
-            is_positive,
-        })
+        Ok(Hypothesis { attributes })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use csv::Reader;
-
     use super::*;
-
     #[test]
-    fn test_row_deserialization() {
-        let data = "\
-Col1,Col2,Col3,Col4,Col5,Col6,output
-∅,?,SomeValue,SomeOtherValue,∅,?,true
-";
-        let mut reader = Reader::from_reader(data.as_bytes());
-        for result in reader.records() {
-            let result = result.expect("Deserialization to be successful");
-
-            let row = Hypothesis::try_from(result).unwrap();
-            assert_eq!(
-                row,
-                Hypothesis {
-                    attributes: vec![
-                        Attribute::NoValue,
-                        Attribute::Any,
-                        Attribute::Value("SomeValue".to_string()),
-                        Attribute::Value("SomeOtherValue".to_string()),
-                        Attribute::NoValue,
-                        Attribute::Any,
-                    ],
-                    is_positive: true,
-                }
-            )
-        }
-    }
-
-    #[test]
-    fn test_row_serialization() {
-        let row = Hypothesis {
+    fn test_row_to_string() {
+        let hypothesis = Hypothesis {
             attributes: vec![
                 Attribute::NoValue,
                 Attribute::Any,
                 Attribute::Value("Foo".to_string()),
             ],
-            is_positive: true,
         };
-        let mut writer = csv::Writer::from_writer(vec![]);
-        writer.write_record(row.to_vec()).unwrap();
 
-        let expected = "∅,?,Foo,true\n";
-        let actual = std::str::from_utf8(&writer.into_inner().unwrap())
-            .unwrap()
-            .to_string();
-
-        assert_eq!(expected, actual);
+        let expected = "⟨∅, ?, Foo⟩";
+        assert_eq!(expected, hypothesis.to_string());
     }
 
     #[test]
@@ -258,5 +192,90 @@ Col1,Col2,Col3,Col4,Col5,Col6,output
 
         // Neither hypothesis is more or less general in this case
         assert!(general.partial_cmp(&specific).is_none());
+    }
+
+    #[test]
+    fn test_general_hypothesis() {
+        let general = Hypothesis::general(5);
+        assert_eq!(
+            general,
+            Hypothesis {
+                attributes: vec![Attribute::Any; 5],
+            }
+        );
+    }
+
+    #[test]
+    fn test_specific_hypothesis() {
+        let general = Hypothesis::specific(5);
+        assert_eq!(
+            general,
+            Hypothesis {
+                attributes: vec![Attribute::NoValue; 5],
+            }
+        );
+    }
+
+    #[test]
+    fn test_hypothesis_classify_valid() {
+        let hypothesis = Hypothesis::from_str("Foo,?,Bar,?,Baz").unwrap();
+        let valid = TrainingExample::new(
+            &[
+                Attribute::Value("Foo".into()),
+                Attribute::Value("Baz".into()),
+                Attribute::Value("Bar".into()),
+                Attribute::Any,
+                Attribute::Value("Baz".into()),
+            ],
+            true,
+        );
+
+        assert!(hypothesis.classify(&valid));
+    }
+
+    #[test]
+    fn test_hypothesis_classify_invalid() {
+        let hypothesis = Hypothesis::from_str("Foo,?,Bar,?,Baz").unwrap();
+        let invalid = TrainingExample::new(
+            &[
+                Attribute::Value("Foo".into()),
+                Attribute::Any,
+                Attribute::Any, // Should fail, any is too general here
+                Attribute::Any,
+                Attribute::Value("Baz".into()),
+            ],
+            true,
+        );
+        assert!(!hypothesis.classify(&invalid));
+    }
+
+    #[test]
+    fn test_hypothesis_specialize() {
+        let hypothesis = Hypothesis::from_str("?,?,?,?,?,?").unwrap();
+        let specializer =
+            TrainingExample::from_str("Rainy,Cold,High,Strong,Warm,Change,false").unwrap();
+
+        let specialized_hypotheses = vec![
+            Hypothesis::from_str("Sunny,?,?,?,?,?").unwrap(),
+            Hypothesis::from_str("?,Warm,?,?,?,?").unwrap(),
+            Hypothesis::from_str("?,?,Normal,?,?,?").unwrap(),
+            Hypothesis::from_str("?,?,?,Weak,?,?").unwrap(),
+            Hypothesis::from_str("?,?,?,?,Cool,?").unwrap(),
+            Hypothesis::from_str("?,?,?,?,?,Same").unwrap(),
+        ];
+
+        let value_data = vec![
+            vec!["Sunny".to_string(), "Rainy".to_string()],
+            vec!["Warm".to_string(), "Cold".to_string()],
+            vec!["Normal".to_string(), "High".to_string()],
+            vec!["Strong".to_string(), "Weak".to_string()],
+            vec!["Warm".to_string(), "Cool".to_string()],
+            vec!["Same".to_string(), "Change".to_string()],
+        ];
+
+        assert_eq!(
+            dbg!(hypothesis.specialize(&specializer, &value_data).unwrap()),
+            specialized_hypotheses
+        )
     }
 }

@@ -1,0 +1,19 @@
+columns:
+  -
+    - Sunny
+    - Rainy
+  -
+    - Warm
+    - Cold
+  -
+    - Normal
+    - High
+  -
+    - Strong
+    - Weak
+  -
+    - Warm
+    - Cool
+  -
+    - Same
+    - Change

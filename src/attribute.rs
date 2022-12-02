@@ -33,22 +33,14 @@ impl Display for Attribute {
 
 impl Attribute {
     pub fn is_consistent(&self, other: &Self) -> bool {
-        // FIXME: May be wrong depending on knowledge of consistency
-        match (self, other) {
-            (Attribute::NoValue, Attribute::NoValue) => true,
-            (Attribute::NoValue, Attribute::Any) => false,
-            (Attribute::NoValue, Attribute::Value(_)) => false,
-            (Attribute::Any, Attribute::NoValue) => false,
-            (Attribute::Any, Attribute::Any) => true,
-            (Attribute::Any, Attribute::Value(_)) => true,
-            (Attribute::Value(_), Attribute::NoValue) => false,
-            (Attribute::Value(_), Attribute::Any) => true,
-            (Attribute::Value(left), Attribute::Value(right)) => left == right,
+        if let (Attribute::Value(left), Attribute::Value(right)) = (self, other) {
+            return left == right;
         }
+        self >= other
     }
 
     /// Return the most specific attribute that satisfies other whilst being the smallest
-    /// generalization of self
+    /// generalization of self. Only works if hypothesis is positive
     pub fn generalize(&self, other: &Self) -> Option<Self> {
         // FIXME: May be wrong depending on knowledge of consistency
         match (self, other) {
@@ -65,15 +57,21 @@ impl Attribute {
     }
 
     /// Return the most specific attribute that satisfies other whilst being the smallest
-    /// generalization of self
-    pub fn specialize(&self, other: &Self) -> Option<Vec<Self>> {
+    /// generalization of self. Only works if hypothesis is negative
+    pub fn specialize(&self, other: &Self, possible_values: &[String]) -> Option<Vec<Self>> {
         // FIXME: May be wrong depending on knowledge of consistency
         match (self, other) {
             (a, b) if a == b => Some(vec![a.clone()]),
-            (Attribute::NoValue, Attribute::Any) => None,
-            (Attribute::NoValue, Attribute::Value(v)) => Some(vec![Attribute::Value(v.clone())]),
+            (Attribute::NoValue, _) => None, // NoValue cannot be specialized further
             (Attribute::Any, Attribute::NoValue) => Some(vec![Attribute::NoValue]),
-            (Attribute::Any, Attribute::Value(v)) => Some(vec![Attribute::Value(v.clone())]),
+            (Attribute::Any, Attribute::Value(v)) => Some(
+                possible_values // FIXME: RESUME HERE - FILTER NOT FILTERING
+                    .iter()
+                    .cloned()
+                    .filter(|new_value| new_value != v)
+                    .map(Attribute::Value)
+                    .collect(),
+            ),
             (Attribute::Value(_), Attribute::NoValue) => Some(vec![Attribute::NoValue]),
             (Attribute::Value(_), Attribute::Any) => None,
             (Attribute::Value(left), Attribute::Value(right)) if left != right => Some(vec![
@@ -112,5 +110,28 @@ mod tests {
         assert!(most_general > middle);
         assert!(most_general > most_specific);
         assert!(middle > most_specific);
+    }
+
+    #[test]
+    fn test_is_consistent_any_with_value() {
+        let any = Attribute::Any;
+        let value = Attribute::Value("Foo".to_string());
+
+        assert!(any.is_consistent(&value));
+    }
+
+    #[test]
+    fn test_not_is_consistent_value_with_other_value() {
+        let value = Attribute::Value("Foo".to_string());
+        let other_value = Attribute::Value("Bar".to_string());
+
+        assert!(!value.is_consistent(&other_value));
+    }
+
+    #[test]
+    fn test_is_consistent_value_reflexive() {
+        let value = Attribute::Value("Foo".to_string());
+
+        assert!(value.is_consistent(&value));
     }
 }
