@@ -71,20 +71,29 @@ impl Attribute {
             (a, b) if a == b => Some(vec![a.clone()]),
             (Attribute::NoValue, _) => None, // NoValue cannot be specialized further
             (Attribute::Any, Attribute::NoValue) => Some(vec![Attribute::NoValue]),
-            (Attribute::Any, Attribute::Value(v)) => Some(
-                possible_values
+            (Attribute::Any, Attribute::Value(v)) => {
+                let values: Vec<Attribute> = possible_values
                     .iter()
                     .cloned()
                     .filter(|new_value| new_value != v)
                     .map(Attribute::Value)
-                    .collect(),
-            ),
+                    .collect()
+                
+                if values.len() <= 0 {
+                    Some(Attribute::NoValue)
+                } else {
+                    Some(values)
+                }
+            },
             (Attribute::Value(_), Attribute::NoValue) => Some(vec![Attribute::NoValue]),
             (Attribute::Value(_), Attribute::Any) => None,
-            (Attribute::Value(left), Attribute::Value(right)) if left != right => Some(vec![
-                Attribute::Value(left.clone()),
-                Attribute::Value(right.clone()),
-            ]),
+            (Attribute::Value(left), Attribute::Value(right)) if left != right => Some(
+                possible_values
+                    .iter()
+                    .filter(|value| value != left && value != right)
+                    .map(Attribute::Value)
+                    .collect(), // If empty, should be NoValue. See Any, Value specialisation
+            ]), // Handle left equals right, should basically be a No-op
             _ => unreachable!(),
         }
     }
