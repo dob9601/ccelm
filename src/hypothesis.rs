@@ -11,6 +11,18 @@ pub struct Hypothesis {
 
 // FIXME: Should hypothesis be renamed to training example? Actual hypotheses all seem to be true
 impl Hypothesis {
+    pub fn enumerate_hypotheses(_specific_boundary: Hypothesis, _general_hypotheses: Vec<Hypothesis>) -> Vec<Hypothesis> {
+        // let mut hypotheses = vec![];
+        //
+        // let zipped_attributes = specific_boundary.attributes.iter().zip(general_hypotheses.attributes.iter())
+        //
+        // for attribute in specific_boundary.attributes.iter() {
+        //     // FIXME: RESUME HERE <_____------------
+        // }
+
+        todo!()
+    }
+
     pub fn general(n_attributes: usize) -> Self {
         Self {
             attributes: vec![Attribute::Any; n_attributes],
@@ -128,6 +140,15 @@ impl Hypothesis {
             .map(|attribute| attribute.to_string())
             .collect()
     }
+
+    pub fn len(&self) -> usize {
+        self.attributes.len()
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 impl Display for Hypothesis {
@@ -150,7 +171,7 @@ impl FromStr for Hypothesis {
         let record: Vec<&str> = record.split(',').map(|str| str.trim()).collect();
         let attributes: Vec<Attribute> = record
             .iter()
-            .map(|record| Attribute::from_str(record).unwrap()) // This unwrap is safe - all cases covered in Attribute enum
+            .map(|record| Attribute::new(record, None, None)) // This unwrap is safe - all cases covered in Attribute enum
             .collect();
 
         Ok(Hypothesis { attributes })

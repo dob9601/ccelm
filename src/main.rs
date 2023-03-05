@@ -1,9 +1,8 @@
 use std::error::Error;
-use std::io::Read;
 
 use ccelm::Cli;
+use ccelm::DatasetReader;
 use ccelm::Hypothesis;
-use ccelm::TrainingExample;
 use clap::Parser;
 use log::info;
 
@@ -12,28 +11,18 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let cli = Cli::parse();
 
-    let column_data = cli.dataset_metadata.columns;
+    let column_data = cli.dataset_metadata.columns.clone();
 
-    let reader = csv::Reader::from_path(cli.input_dataset)?;
+    let mut reader = DatasetReader::new(cli.input_dataset, cli.dataset_metadata)?;
+    let attribute_length = reader.attributes()?.len();
 
-    let training_examples = reader
-        .into_records()
-        .map(|record| record.map(TrainingExample::try_from))
-        .collect::<Result<Result<Vec<_>, _>, _>>()??;
-
-    debug_assert!(training_examples
-        .iter()
-        .all(|example| example.attributes.len() == training_examples[0].attributes.len()));
-    debug_assert!(training_examples[0].attributes.len() == column_data.len());
-
-    let attribute_length = training_examples[0].attributes.len();
-
-    // PERF: Most examples treat this as a single value rather than a vec, double check? book
-    // implies otherwise
     let mut specific_hypothesis = Hypothesis::specific(attribute_length);
     let mut general_hypotheses = vec![Hypothesis::general(attribute_length)];
 
-    for example in training_examples.into_iter() {
+    for maybe_example in reader {
+        // Reading a row from a CSV is fallible. Unwrap the inner value first.
+        let example = maybe_example?;
+
         println!("Specific Boundary {specific_hypothesis}");
         println!(
             "General Boundary {:?}",

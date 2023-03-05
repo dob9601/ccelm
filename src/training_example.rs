@@ -1,8 +1,6 @@
 use std::fmt::Display;
 use std::str::{FromStr, ParseBoolError};
 
-use csv::StringRecord;
-
 use crate::attribute::Attribute;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,23 +47,6 @@ impl Display for TrainingExample {
     }
 }
 
-impl TryFrom<StringRecord> for TrainingExample {
-    type Error = ParseBoolError;
-
-    fn try_from(record: StringRecord) -> Result<Self, Self::Error> {
-        let attributes: Vec<Attribute> = record
-            .iter()
-            .take(record.len() - 1)
-            .map(|record| Attribute::from_str(record).unwrap()) // This unwrap is safe - all cases covered in Attribute enum
-            .collect();
-
-        Ok(TrainingExample {
-            attributes,
-            is_positive: bool::from_str(record.get(record.len() - 1).unwrap())?,
-        })
-    }
-}
-
 impl FromStr for TrainingExample {
     type Err = ParseBoolError;
 
@@ -73,7 +54,7 @@ impl FromStr for TrainingExample {
         let record: Vec<&str> = record.split(',').map(|str| str.trim()).collect();
         let attributes: Vec<Attribute> = record[..record.len() - 1]
             .iter()
-            .map(|record| Attribute::from_str(record).unwrap()) // This unwrap is safe - all cases covered in Attribute enum
+            .map(|record| Attribute::new(record, None, None))
             .collect();
 
         let is_positive = bool::from_str(record.last().unwrap())?;
@@ -87,37 +68,7 @@ impl FromStr for TrainingExample {
 
 #[cfg(test)]
 mod tests {
-    use csv::Reader;
-
     use super::*;
-
-    #[test]
-    fn test_row_deserialization() {
-        let data = "\
-Col1,Col2,Col3,Col4,Col5,Col6,output
-∅,?,SomeValue,SomeOtherValue,∅,?,true
-";
-        let mut reader = Reader::from_reader(data.as_bytes());
-        for result in reader.records() {
-            let result = result.expect("Deserialization to be successful");
-
-            let row = TrainingExample::try_from(result).unwrap();
-            assert_eq!(
-                row,
-                TrainingExample {
-                    attributes: vec![
-                        Attribute::NoValue,
-                        Attribute::Any,
-                        Attribute::Value("SomeValue".to_string()),
-                        Attribute::Value("SomeOtherValue".to_string()),
-                        Attribute::NoValue,
-                        Attribute::Any,
-                    ],
-                    is_positive: true,
-                }
-            )
-        }
-    }
 
     #[test]
     fn test_row_serialization() {

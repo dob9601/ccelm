@@ -2,7 +2,8 @@ use std::error::Error;
 use std::path::PathBuf;
 
 use clap::Parser;
-use serde::Deserialize;
+
+use crate::reader::DatasetMetadata;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -25,9 +26,4 @@ pub struct Cli {
 fn parse_dataset_metadata(path: &str) -> Result<DatasetMetadata, Box<dyn Error + Sync + Send>> {
     let file = std::fs::File::open(path)?;
     Ok(serde_yaml::from_reader(file)?)
-}
-
-#[derive(Deserialize, Clone)]
-pub struct DatasetMetadata {
-    pub columns: Vec<Vec<String>>,
 }

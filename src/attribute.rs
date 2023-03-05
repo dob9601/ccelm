@@ -1,6 +1,4 @@
-use std::convert::Infallible;
 use std::fmt::Display;
-use std::str::FromStr;
 
 /// Deriving `PartialOrd` works by ranking enums in the order they are defined (Any is ranked the
 /// highest - i.e. it is the most general)
@@ -32,6 +30,19 @@ impl Display for Attribute {
 }
 
 impl Attribute {
+    pub fn new(attribute: &str, any_value_string: Option<&str>, no_value_string: Option<&str>) -> Self {
+        let any_value_string = any_value_string.unwrap_or("?");
+        let no_value_string = no_value_string.unwrap_or("∅");
+
+        if attribute == no_value_string {
+            Self::NoValue
+        } else if attribute == any_value_string {
+            Self::Any
+        } else {
+            Self::Value(attribute.to_string())
+        }
+    }
+
     pub fn is_consistent(&self, other: &Self) -> bool {
         if let (Attribute::Value(left), Attribute::Value(right)) = (self, other) {
             return left == right;
@@ -62,7 +73,7 @@ impl Attribute {
     }
 
     /// Return the most specific attribute that satisfies other whilst being the smallest
-    /// generalization of self. Only works if hypothesis is negative
+    /// generalization of self. Only works if the training example is negative.
     ///
     /// Some attribute if the attribute can be further specialized by the provided attribute. Else,
     /// none
@@ -101,25 +112,26 @@ impl Attribute {
                     Some(values)
                 }
             },
-            (Attribute::Value(left), Attribute::Value(right)) if left == right => Some(vec![Attribute::Value(left.clone())]),
+            // An attribute cannot be specialised by itself
+            (Attribute::Value(left), Attribute::Value(right)) if left == right => None,
             _ => unreachable!(),
         }
     }
 }
-
-impl FromStr for Attribute {
-    type Err = Infallible;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == "∅" {
-            Ok(Self::NoValue)
-        } else if s == "?" {
-            Ok(Self::Any)
-        } else {
-            Ok(Self::Value(s.to_string()))
-        }
-    }
-}
+//
+// impl FromStr for Attribute {
+//     type Err = Infallible;
+//
+//     fn from_str(s: &str) -> Result<Self, Self::Err> {
+//         if s == "∅" {
+//             Ok(Self::NoValue)
+//         } else if s == "?" {
+//             Ok(Self::Any)
+//         } else {
+//             Ok(Self::Value(s.to_string()))
+//         }
+//     }
+// }
 
 #[cfg(test)]
 mod tests {
