@@ -21,6 +21,9 @@ pub struct Cli {
 
     #[arg(short, long, help = "Path to output all valid hypotheses to")]
     pub output_path: Option<PathBuf>,
+
+    #[arg(long, help = "Whether the file is delimited by tabs", required = false)]
+    pub tabs: bool
 }
 
 fn parse_dataset_metadata(path: &str) -> Result<DatasetMetadata, Box<dyn Error + Sync + Send>> {

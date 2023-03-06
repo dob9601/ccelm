@@ -296,7 +296,7 @@ mod tests {
         ];
 
         assert_eq!(
-            dbg!(hypothesis.specialize(&specializer, &value_data).unwrap()),
+            hypothesis.specialize(&specializer, &value_data).unwrap(),
             specialized_hypotheses
         )
     }

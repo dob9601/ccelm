@@ -3,6 +3,7 @@ use std::error::Error;
 use ccelm::Cli;
 use ccelm::DatasetReader;
 use ccelm::Hypothesis;
+use ccelm::TrainingExample;
 use clap::Parser;
 use log::info;
 
@@ -13,26 +14,35 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let column_data = cli.dataset_metadata.columns.clone();
 
-    let mut reader = DatasetReader::new(cli.input_dataset, cli.dataset_metadata)?;
+    let delimiter = if cli.tabs {
+        b'\t'
+    } else {
+        b','
+    };
+
+    let mut reader = DatasetReader::new(cli.input_dataset, cli.dataset_metadata, delimiter)?;
     let attribute_length = reader.attributes()?.len();
 
     let mut specific_hypothesis = Hypothesis::specific(attribute_length);
     let mut general_hypotheses = vec![Hypothesis::general(attribute_length)];
 
-    for maybe_example in reader {
+    let training_examples = reader.into_iter().collect::<Result<Vec<TrainingExample>, Box<dyn Error>>>()?;
+
+    let training_example_count = training_examples.len();
+
+    for (index, example) in training_examples.into_iter().enumerate() {
         // Reading a row from a CSV is fallible. Unwrap the inner value first.
-        let example = maybe_example?;
 
-        println!("Specific Boundary {specific_hypothesis}");
-        println!(
-            "General Boundary {:?}",
-            general_hypotheses
-                .iter()
-                .map(|h| h.to_string())
-                .collect::<Vec<String>>()
-        );
-        println!("Training example: {example}\n");
+        println!("{index}/{training_example_count} | {} general hypotheses", general_hypotheses.len());
 
+        // println!("Specific Boundary {specific_hypothesis}");
+        // println!(
+        //     "General Boundary {:?}",
+        //     general_hypotheses
+        //         .iter()
+        //         .map(|h| h.to_string())
+        //         .collect::<Vec<String>>()
+        // );
         info!("Processing training example: {example}");
         if example.is_positive {
             // Remove any hypothesis that is inconsistent with d

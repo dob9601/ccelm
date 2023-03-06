@@ -17,9 +17,12 @@ impl DatasetReader {
     pub fn new<P: AsRef<Path>>(
         dataset_path: P,
         metadata: DatasetMetadata,
+        delimiter: u8,
     ) -> Result<Self, csv::Error> {
         Ok(Self {
-            reader: csv::Reader::from_path(dataset_path)?,
+            reader: csv::ReaderBuilder::new()
+                .delimiter(delimiter)
+                .from_path(dataset_path)?,
             metadata,
         })
     }
