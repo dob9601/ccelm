@@ -4,7 +4,7 @@ use std::str::{FromStr, ParseBoolError};
 use crate::attribute::Attribute;
 use crate::training_example::TrainingExample;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Hypothesis {
     pub attributes: Vec<Attribute>,
 }

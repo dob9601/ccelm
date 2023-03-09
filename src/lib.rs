@@ -12,3 +12,5 @@ pub use cli::Cli;
 
 mod reader;
 pub use reader::DatasetReader;
+
+pub mod hypothesis_space;

@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 /// Deriving `PartialOrd` works by ranking enums in the order they are defined (Any is ranked the
 /// highest - i.e. it is the most general)
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Attribute {
     /// No value can yield a positive example
     NoValue,
