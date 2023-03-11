@@ -2,6 +2,7 @@ use std::fmt::Display;
 use std::str::{FromStr, ParseBoolError};
 
 use crate::attribute::Attribute;
+use crate::reader::DatasetMetadata;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TrainingExample {
@@ -30,6 +31,22 @@ impl TrainingExample {
 
         bytes
     }
+
+    pub fn from_str(record: &str, dataset_metadata: &DatasetMetadata) -> Result<Self, ParseBoolError> {
+        let record: Vec<&str> = record.split(',').map(|str| str.trim()).collect();
+        let attributes: Vec<Attribute> = record[..record.len() - 1]
+            .iter()
+            .enumerate()
+            .map(|(index, record)| Attribute::new(record, index, dataset_metadata))
+            .collect();
+
+        let is_positive = bool::from_str(record.last().unwrap())?;
+
+        Ok(TrainingExample {
+            attributes,
+            is_positive,
+        })
+    }
 }
 
 impl Display for TrainingExample {
@@ -47,25 +64,6 @@ impl Display for TrainingExample {
     }
 }
 
-impl FromStr for TrainingExample {
-    type Err = ParseBoolError;
-
-    fn from_str(record: &str) -> Result<Self, Self::Err> {
-        let record: Vec<&str> = record.split(',').map(|str| str.trim()).collect();
-        let attributes: Vec<Attribute> = record[..record.len() - 1]
-            .iter()
-            .map(|record| Attribute::new(record, None, None))
-            .collect();
-
-        let is_positive = bool::from_str(record.last().unwrap())?;
-
-        Ok(TrainingExample {
-            attributes,
-            is_positive,
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -76,7 +74,7 @@ mod tests {
             attributes: vec![
                 Attribute::NoValue,
                 Attribute::Any,
-                Attribute::Value("Foo".to_string()),
+                Attribute::Value(0),
             ],
             is_positive: true,
         };

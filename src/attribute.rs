@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use crate::reader::DatasetMetadata;
+
 /// Deriving `PartialOrd` works by ranking enums in the order they are defined (Any is ranked the
 /// highest - i.e. it is the most general)
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -10,7 +12,7 @@ pub enum Attribute {
     /// This specific value can lead a positive example
     Value(
         /// The specific value that can lead to a positive example
-        String,
+        u8,
     ),
 
     /// Any value of this attribute can yield a positive example
@@ -24,22 +26,40 @@ impl Display for Attribute {
         match self {
             Attribute::NoValue => f.write_str("∅"),
             Attribute::Any => f.write_str("?"),
-            Attribute::Value(val) => f.write_str(val),
+            Attribute::Value(val) => f.write_str(&val.to_string()),
         }
     }
 }
 
 impl Attribute {
-    pub fn new(attribute: &str, any_value_string: Option<&str>, no_value_string: Option<&str>) -> Self {
-        let any_value_string = any_value_string.unwrap_or("?");
-        let no_value_string = no_value_string.unwrap_or("∅");
-
-        if attribute == no_value_string {
+    pub fn new(attribute: &str, column_index: usize, dataset_metadata: &DatasetMetadata) -> Self {
+        if attribute == dataset_metadata.no_value_string {
             Self::NoValue
-        } else if attribute == any_value_string {
+        } else if attribute == dataset_metadata.any_value_string {
             Self::Any
         } else {
-            Self::Value(attribute.to_string())
+            Self::Value(Attribute::value_to_index(
+                attribute,
+                column_index,
+                dataset_metadata,
+            ))
+        }
+    }
+
+    fn value_to_index(value: &str, column_index: usize, dataset_metadata: &DatasetMetadata) -> u8 {
+        dataset_metadata.columns[column_index]
+            .iter()
+            .position(|item| item == value)
+            .unwrap()
+            .try_into()
+            .unwrap()
+    }
+
+    pub fn to_valued_string(&self, column_index: usize, dataset_metadata: &DatasetMetadata) -> String {
+        if let Self::Value(value) = self {
+            dataset_metadata.columns[column_index][usize::from(*value)].clone()
+        } else {
+            self.to_string()
         }
     }
 
@@ -62,7 +82,7 @@ impl Attribute {
             (Attribute::NoValue, Attribute::Any) => Some(Attribute::Any),
             // FIXME: For this to work when there are more than 2 attribute values, should
             // generalize to every possible combination
-            (Attribute::NoValue, Attribute::Value(v)) => Some(Attribute::Value(v.clone())),
+            (Attribute::NoValue, Attribute::Value(v)) => Some(Attribute::Value(*v)),
             (Attribute::Any, Attribute::NoValue) => None,
             (Attribute::Any, Attribute::Value(_)) => Some(Attribute::Any),
             (Attribute::Value(_), Attribute::NoValue) => None,
@@ -79,59 +99,29 @@ impl Attribute {
     /// none
     pub fn specialize(&self, other: &Self, possible_values: &[String]) -> Option<Vec<Self>> {
         match (self, other) {
-            (a, b) if a == b => Some(vec![a.clone()]),
+            (a, b) if a == b => None,
             (Attribute::NoValue, _) => None, // NoValue cannot be specialized further
             (Attribute::Any, Attribute::NoValue) => Some(vec![Attribute::NoValue]),
             (Attribute::Any, Attribute::Value(v)) => {
-                let values: Vec<Attribute> = possible_values
-                    .iter()
-                    .filter(|new_value| new_value != &v)
-                    .cloned()
+                let values: Vec<Attribute> = (0..possible_values.len())
+                    .map(|index| u8::try_from(index).unwrap())
+                    .filter(|index| index != v)
                     .map(Attribute::Value)
                     .collect();
-                
+
                 if values.is_empty() {
                     Some(vec![Attribute::NoValue])
                 } else {
                     Some(values)
                 }
-            },
+            }
             (Attribute::Value(_), Attribute::NoValue) => Some(vec![Attribute::NoValue]),
             (Attribute::Value(_), Attribute::Any) => None,
-            (Attribute::Value(left), Attribute::Value(right)) if left != right => {
-                let values: Vec<Attribute> = possible_values
-                    .iter()
-                    .filter(|value| value != &left && value != &right)
-                    .cloned()
-                    .map(Attribute::Value)
-                    .collect(); // If empty, should be NoValue. See Any, Value specialisation
-                
-                if values.is_empty() {
-                    Some(vec![Attribute::NoValue])
-                } else {
-                    Some(values)
-                }
-            },
-            // An attribute cannot be specialised by itself
-            (Attribute::Value(left), Attribute::Value(right)) if left == right => None,
+            (Attribute::Value(_), Attribute::Value(_)) => None,
             _ => unreachable!(),
         }
     }
 }
-//
-// impl FromStr for Attribute {
-//     type Err = Infallible;
-//
-//     fn from_str(s: &str) -> Result<Self, Self::Err> {
-//         if s == "∅" {
-//             Ok(Self::NoValue)
-//         } else if s == "?" {
-//             Ok(Self::Any)
-//         } else {
-//             Ok(Self::Value(s.to_string()))
-//         }
-//     }
-// }
 
 #[cfg(test)]
 mod tests {
@@ -140,7 +130,7 @@ mod tests {
     #[test]
     fn test_compare_attributes() {
         let most_general = Attribute::Any;
-        let middle = Attribute::Value("Foo".to_string());
+        let middle = Attribute::Value(1);
         let most_specific = Attribute::NoValue;
 
         assert!(most_general > middle);
@@ -151,22 +141,22 @@ mod tests {
     #[test]
     fn test_is_consistent_any_with_value() {
         let any = Attribute::Any;
-        let value = Attribute::Value("Foo".to_string());
+        let value = Attribute::Value(1);
 
         assert!(any.is_consistent(&value));
     }
 
     #[test]
     fn test_not_is_consistent_value_with_other_value() {
-        let value = Attribute::Value("Foo".to_string());
-        let other_value = Attribute::Value("Bar".to_string());
+        let value = Attribute::Value(1);
+        let other_value = Attribute::Value(2);
 
         assert!(!value.is_consistent(&other_value));
     }
 
     #[test]
     fn test_is_consistent_value_reflexive() {
-        let value = Attribute::Value("Foo".to_string());
+        let value = Attribute::Value(1);
 
         assert!(value.is_consistent(&value));
     }

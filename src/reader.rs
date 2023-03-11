@@ -21,6 +21,7 @@ impl DatasetReader {
     ) -> Result<Self, csv::Error> {
         Ok(Self {
             reader: csv::ReaderBuilder::new()
+                .trim(csv::Trim::All)
                 .delimiter(delimiter)
                 .from_path(dataset_path)?,
             metadata,
@@ -58,13 +59,8 @@ impl Iterator for DatasetReader {
                 let attributes: Vec<Attribute> = record
                     .iter()
                     .take(record.len() - 1)
-                    .map(|record| {
-                        Attribute::new(
-                            record,
-                            self.metadata.any_value_string.as_deref(),
-                            self.metadata.no_value_string.as_deref(),
-                        )
-                    }) // This unwrap is safe - all cases covered in Attribute enum
+                    .enumerate()
+                    .map(|(index, record)| Attribute::new(record, index, &self.metadata)) // This unwrap is safe - all cases covered in Attribute enum
                     .collect();
                 Some(Ok(TrainingExample::new(&attributes, is_positive)))
             }
@@ -73,9 +69,35 @@ impl Iterator for DatasetReader {
     }
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct DatasetMetadata {
     pub columns: Vec<Vec<String>>,
-    pub no_value_string: Option<String>,
-    pub any_value_string: Option<String>,
+
+    #[serde(default = "no_value_string_default")]
+    pub no_value_string: String,
+
+    #[serde(default = "any_value_string_default")]
+    pub any_value_string: String,
+}
+
+fn no_value_string_default() -> String {
+    "∅".to_string()
+}
+
+fn any_value_string_default() -> String {
+    "?".to_string()
+}
+
+impl DatasetMetadata {
+    pub fn new(
+        columns: Vec<Vec<String>>,
+        no_value_string: Option<String>,
+        any_value_string: Option<String>,
+    ) -> Self {
+        Self {
+            columns,
+            no_value_string: no_value_string.unwrap_or_else(no_value_string_default),
+            any_value_string: any_value_string.unwrap_or_else(any_value_string_default),
+        }
+    }
 }

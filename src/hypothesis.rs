@@ -1,37 +1,54 @@
 use std::fmt::Display;
-use std::str::{FromStr, ParseBoolError};
+use std::str::ParseBoolError;
+
+use derivative::Derivative;
 
 use crate::attribute::Attribute;
+use crate::reader::DatasetMetadata;
 use crate::training_example::TrainingExample;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Hypothesis {
+#[derive(Clone, Derivative)]
+#[derivative(Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct Hypothesis<'a> {
     pub attributes: Vec<Attribute>,
+
+    #[derivative(
+        PartialEq = "ignore",
+        Ord = "ignore",
+        PartialOrd = "ignore",
+        Hash = "ignore"
+    )]
+    dataset_metadata: &'a DatasetMetadata,
 }
 
 // FIXME: Should hypothesis be renamed to training example? Actual hypotheses all seem to be true
-impl Hypothesis {
-    pub fn enumerate_hypotheses(_specific_boundary: Hypothesis, _general_hypotheses: Vec<Hypothesis>) -> Vec<Hypothesis> {
-        // let mut hypotheses = vec![];
-        //
-        // let zipped_attributes = specific_boundary.attributes.iter().zip(general_hypotheses.attributes.iter())
-        //
-        // for attribute in specific_boundary.attributes.iter() {
-        //     // FIXME: RESUME HERE <_____------------
-        // }
+impl<'a> Hypothesis<'a> {
+    // pub fn enumerate_hypotheses(
+    //     _specific_boundary: Hypothesis,
+    //     _general_hypotheses: Vec<Hypothesis>,
+    // ) -> Vec<Hypothesis> {
+    //     // let mut hypotheses = vec![];
+    //     //
+    //     // let zipped_attributes = specific_boundary.attributes.iter().zip(general_hypotheses.attributes.iter())
+    //     //
+    //     // for attribute in specific_boundary.attributes.iter() {
+    //     //     // FIXME: RESUME HERE <_____------------
+    //     // }
+    //
+    //     todo!()
+    // }
 
-        todo!()
-    }
-
-    pub fn general(n_attributes: usize) -> Self {
+    pub fn general(n_attributes: usize, dataset_metadata: &'a DatasetMetadata) -> Self {
         Self {
             attributes: vec![Attribute::Any; n_attributes],
+            dataset_metadata,
         }
     }
 
-    pub fn specific(n_attributes: usize) -> Self {
+    pub fn specific(n_attributes: usize, dataset_metadata: &'a DatasetMetadata) -> Self {
         Self {
             attributes: vec![Attribute::NoValue; n_attributes],
+            dataset_metadata,
         }
     }
 
@@ -93,14 +110,17 @@ impl Hypothesis {
     }
 
     /// Return the most minimal generalization that is consistent with the new training example
-    pub fn generalize(&self, training_example: &TrainingExample) -> Option<Self> {
+    pub fn generalize(&self, training_example: &TrainingExample) -> Self {
         let attributes = self
             .attributes
             .iter()
             .zip(training_example.attributes.iter())
             .map(|(attribute, other_attribute)| attribute.generalize(other_attribute))
             .collect::<Option<Vec<Attribute>>>()?;
-        Some(Self { attributes })
+        Self {
+            attributes,
+            dataset_metadata: self.dataset_metadata,
+        }
     }
 
     /// Return the most minimal specialization that is consistent with both hypotheses
@@ -108,7 +128,7 @@ impl Hypothesis {
         &self,
         training_example: &TrainingExample,
         value_data: &[Vec<String>],
-    ) -> Option<Vec<Self>> {
+    ) -> Vec<Self> {
         let mut hypotheses = vec![];
         // FIXME: RESUME HERE
         for (index, (attribute, other_attribute)) in self
@@ -125,12 +145,13 @@ impl Hypothesis {
                     new_attributes[index] = specialization;
                     hypotheses.push(Hypothesis {
                         attributes: new_attributes,
+                        dataset_metadata: self.dataset_metadata,
                     })
                 }
             }
         }
 
-        Some(hypotheses)
+        hypotheses
     }
 
     pub fn to_vec(self) -> Vec<String> {
@@ -149,14 +170,32 @@ impl Hypothesis {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+
+    pub fn from_str(
+        record: &str,
+        dataset_metadata: &'static DatasetMetadata,
+    ) -> Result<Self, ParseBoolError> {
+        let record: Vec<&str> = record.split(',').map(|str| str.trim()).collect();
+        let attributes: Vec<Attribute> = record
+            .iter()
+            .enumerate()
+            .map(|(index, record)| Attribute::new(record, index, dataset_metadata)) // This unwrap is safe - all cases covered in Attribute enum
+            .collect();
+
+        Ok(Hypothesis {
+            attributes,
+            dataset_metadata,
+        })
+    }
 }
 
-impl Display for Hypothesis {
+impl Display for Hypothesis<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let attributes = self
             .attributes
             .iter()
-            .map(|h| h.to_string())
+            .enumerate()
+            .map(|(index, attribute)| attribute.to_valued_string(index, self.dataset_metadata))
             .collect::<Vec<String>>()
             .join(", ");
 
@@ -164,31 +203,24 @@ impl Display for Hypothesis {
     }
 }
 
-impl FromStr for Hypothesis {
-    type Err = ParseBoolError;
-
-    fn from_str(record: &str) -> Result<Self, Self::Err> {
-        let record: Vec<&str> = record.split(',').map(|str| str.trim()).collect();
-        let attributes: Vec<Attribute> = record
-            .iter()
-            .map(|record| Attribute::new(record, None, None)) // This unwrap is safe - all cases covered in Attribute enum
-            .collect();
-
-        Ok(Hypothesis { attributes })
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use lazy_static::lazy_static;
+
     use super::*;
+
+    lazy_static! {
+        static ref DATASET_METADATA: DatasetMetadata = {
+            serde_yaml::from_reader(std::fs::File::open("./data/enjoysport/metadata.yaml").unwrap())
+                .unwrap()
+        };
+    }
+
     #[test]
     fn test_row_to_string() {
         let hypothesis = Hypothesis {
-            attributes: vec![
-                Attribute::NoValue,
-                Attribute::Any,
-                Attribute::Value("Foo".to_string()),
-            ],
+            attributes: vec![Attribute::NoValue, Attribute::Any, Attribute::Value(0)],
+            dataset_metadata: &DATASET_METADATA,
         };
 
         let expected = "⟨∅, ?, Foo⟩";
@@ -197,57 +229,63 @@ mod tests {
 
     #[test]
     fn test_hypothesis_generality_book_example() {
-        let hypothesis = Hypothesis::from_str("?,?,Normal,?,?,?").unwrap();
-        let other = Hypothesis::from_str("Sunny,Warm,?,Strong,Warm,Same").unwrap();
+        let hypothesis = Hypothesis::from_str("?,?,Normal,?,?,?", &DATASET_METADATA).unwrap();
+        let other =
+            Hypothesis::from_str("Sunny,Warm,?,Strong,Warm,Same", &DATASET_METADATA).unwrap();
         assert!(!hypothesis.is_more_general(&other));
     }
 
     #[test]
     fn test_hypothesis_generality_book_example_2() {
-        let hypothesis = Hypothesis::from_str("Sunny,?,?,?,?,?").unwrap();
-        let other = Hypothesis::from_str("Sunny,Warm,?,Strong,Warm,Same").unwrap();
+        let hypothesis = Hypothesis::from_str("Sunny,?,?,?,?,?", &DATASET_METADATA).unwrap();
+        let other =
+            Hypothesis::from_str("Sunny,Warm,?,Strong,Warm,Same", &DATASET_METADATA).unwrap();
         assert!(hypothesis.is_more_general(&other));
     }
 
     #[test]
     fn test_hypothesis_generality_book_example_3() {
-        let hypothesis = Hypothesis::from_str("?,?,?,Weak,?,?").unwrap();
-        let other = Hypothesis::from_str("Sunny,Warm,?,Strong,Warm,Same").unwrap();
+        let hypothesis = Hypothesis::from_str("?,?,?,Weak,?,?", &DATASET_METADATA).unwrap();
+        let other =
+            Hypothesis::from_str("Sunny,Warm,?,Strong,Warm,Same", &DATASET_METADATA).unwrap();
         assert!(!hypothesis.is_more_general(&other));
     }
 
     #[test]
     fn test_general_hypothesis() {
-        let general = Hypothesis::general(5);
+        let general = Hypothesis::general(5, &DATASET_METADATA);
         assert_eq!(
             general,
             Hypothesis {
                 attributes: vec![Attribute::Any; 5],
+                dataset_metadata: &DATASET_METADATA
             }
         );
     }
 
     #[test]
     fn test_specific_hypothesis() {
-        let general = Hypothesis::specific(5);
+        let general = Hypothesis::specific(5, &DATASET_METADATA);
         assert_eq!(
             general,
             Hypothesis {
                 attributes: vec![Attribute::NoValue; 5],
+                dataset_metadata: &DATASET_METADATA
             }
         );
     }
 
     #[test]
     fn test_hypothesis_classify_valid() {
-        let hypothesis = Hypothesis::from_str("Foo,?,Bar,?,Baz").unwrap();
+        let hypothesis = Hypothesis::from_str("Sunny,?,High,?,Warm,?", &DATASET_METADATA).unwrap();
         let valid = TrainingExample::new(
             &[
-                Attribute::Value("Foo".into()),
-                Attribute::Value("Baz".into()),
-                Attribute::Value("Bar".into()),
+                Attribute::Value(0),
                 Attribute::Any,
-                Attribute::Value("Baz".into()),
+                Attribute::Value(1),
+                Attribute::Any,
+                Attribute::Value(0),
+                Attribute::Any,
             ],
             true,
         );
@@ -257,14 +295,16 @@ mod tests {
 
     #[test]
     fn test_hypothesis_classify_invalid() {
-        let hypothesis = Hypothesis::from_str("Foo,?,Bar,?,Baz").unwrap();
+        let hypothesis = Hypothesis::from_str("Sunny,?,High,?,Warm,?", &DATASET_METADATA).unwrap();
         let invalid = TrainingExample::new(
             &[
-                Attribute::Value("Foo".into()),
+                // Should fail, too general
                 Attribute::Any,
-                Attribute::Any, // Should fail, any is too general here
                 Attribute::Any,
-                Attribute::Value("Baz".into()),
+                Attribute::Any,
+                Attribute::Any,
+                Attribute::Any,
+                Attribute::Any,
             ],
             true,
         );
@@ -273,17 +313,20 @@ mod tests {
 
     #[test]
     fn test_hypothesis_specialize() {
-        let hypothesis = Hypothesis::from_str("?,?,?,?,?,?").unwrap();
-        let specializer =
-            TrainingExample::from_str("Rainy,Cold,High,Strong,Warm,Change,false").unwrap();
+        let hypothesis = Hypothesis::from_str("?,?,?,?,?,?", &DATASET_METADATA).unwrap();
+        let specializer = TrainingExample::from_str(
+            "Rainy,Cold,High,Strong,Warm,Change,false",
+            &DATASET_METADATA,
+        )
+        .unwrap();
 
         let specialized_hypotheses = vec![
-            Hypothesis::from_str("Sunny,?,?,?,?,?").unwrap(),
-            Hypothesis::from_str("?,Warm,?,?,?,?").unwrap(),
-            Hypothesis::from_str("?,?,Normal,?,?,?").unwrap(),
-            Hypothesis::from_str("?,?,?,Weak,?,?").unwrap(),
-            Hypothesis::from_str("?,?,?,?,Cool,?").unwrap(),
-            Hypothesis::from_str("?,?,?,?,?,Same").unwrap(),
+            Hypothesis::from_str("Sunny,?,?,?,?,?", &DATASET_METADATA).unwrap(),
+            Hypothesis::from_str("?,Warm,?,?,?,?", &DATASET_METADATA).unwrap(),
+            Hypothesis::from_str("?,?,Normal,?,?,?", &DATASET_METADATA).unwrap(),
+            Hypothesis::from_str("?,?,?,Weak,?,?", &DATASET_METADATA).unwrap(),
+            Hypothesis::from_str("?,?,?,?,Cool,?", &DATASET_METADATA).unwrap(),
+            Hypothesis::from_str("?,?,?,?,?,Same", &DATASET_METADATA).unwrap(),
         ];
 
         let value_data = vec![
@@ -296,16 +339,17 @@ mod tests {
         ];
 
         assert_eq!(
-            hypothesis.specialize(&specializer, &value_data).unwrap(),
+            hypothesis.specialize(&specializer, &value_data),
             specialized_hypotheses
         )
     }
 
     #[test]
     fn test_is_consistent_book_example() {
-        let hypothesis = Hypothesis::from_str("?,?,?,?,?,Same").unwrap();
+        let hypothesis = Hypothesis::from_str("?,?,?,?,?,Same", &DATASET_METADATA).unwrap();
         let training_example =
-            TrainingExample::from_str("Sunny,Warm,High,Strong,Cool,Change,true").unwrap();
+            TrainingExample::from_str("Sunny,Warm,High,Strong,Cool,Change,true", &DATASET_METADATA)
+                .unwrap();
         assert!(!hypothesis.is_consistent(&training_example));
     }
 }
