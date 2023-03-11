@@ -72,15 +72,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
 
         info!("Successfully processed example");
-        println!("Specific Boundary {specific_hypothesis}");
     }
     println!("Specific Boundary {specific_hypothesis}");
     println!(
-        "General Boundary: {}",
-        general_hypotheses
-            .iter()
-            .map(|h| h.to_string())
-            .join("\n")
+        "General Boundary: {} hypotheses",
+        general_hypotheses.len()
+            // .iter()
+            // .map(|h| h.to_string())
+            // .join("\n")
     );
 
     Ok(())

@@ -130,7 +130,6 @@ impl<'a> Hypothesis<'a> {
         value_data: &[Vec<String>],
     ) -> Vec<Self> {
         let mut hypotheses = vec![];
-        // FIXME: RESUME HERE
         for (index, (attribute, other_attribute)) in self
             .attributes
             .iter()
