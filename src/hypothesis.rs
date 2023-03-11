@@ -110,17 +110,17 @@ impl<'a> Hypothesis<'a> {
     }
 
     /// Return the most minimal generalization that is consistent with the new training example
-    pub fn generalize(&self, training_example: &TrainingExample) -> Self {
+    pub fn generalize(&self, training_example: &TrainingExample) -> Option<Self> {
         let attributes = self
             .attributes
             .iter()
             .zip(training_example.attributes.iter())
-            .map(|(attribute, other_attribute)| attribute.generalize(other_attribute))
-            .collect::<Option<Vec<Attribute>>>()?;
-        Self {
+            .map(|(attribute, other_attribute)| attribute.generalize(other_attribute).unwrap_or(dbg!(attribute.clone())))
+            .collect::<Vec<Attribute>>();
+        Some(Self {
             attributes,
             dataset_metadata: self.dataset_metadata,
-        }
+        })
     }
 
     /// Return the most minimal specialization that is consistent with both hypotheses

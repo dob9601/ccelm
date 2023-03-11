@@ -72,6 +72,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
 
         info!("Successfully processed example");
+        println!("Specific Boundary {specific_hypothesis}");
     }
     println!("Specific Boundary {specific_hypothesis}");
     println!(

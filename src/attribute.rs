@@ -78,16 +78,16 @@ impl Attribute {
     /// none
     pub fn generalize(&self, other: &Self) -> Option<Self> {
         match (self, other) {
-            (a, b) if a == b => Some(a.clone()),
+            (a, b) if a == b => None,
             (Attribute::NoValue, Attribute::Any) => Some(Attribute::Any),
-            // FIXME: For this to work when there are more than 2 attribute values, should
-            // generalize to every possible combination
             (Attribute::NoValue, Attribute::Value(v)) => Some(Attribute::Value(*v)),
+
             (Attribute::Any, Attribute::NoValue) => None,
-            (Attribute::Any, Attribute::Value(_)) => Some(Attribute::Any),
+            (Attribute::Any, Attribute::Value(_)) => None,
+
             (Attribute::Value(_), Attribute::NoValue) => None,
             (Attribute::Value(_), Attribute::Any) => Some(Attribute::Any),
-            (a, b) if a != b => Some(Attribute::Any),
+            (Attribute::Value(_), Attribute::Value(_)) => Some(Attribute::Any),
             _ => unreachable!(),
         }
     }
