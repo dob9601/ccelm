@@ -16,6 +16,8 @@ use std::error::Error;
 fn main() -> Result<(), Box<dyn Error>> {
     pretty_env_logger::init();
 
+    let chars = "Foo".to_string();
+
     let cli = Cli::parse();
 
     let column_data = cli.dataset_metadata.columns.clone();

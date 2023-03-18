@@ -82,12 +82,12 @@ impl Attribute {
             (Attribute::NoValue, Attribute::Any) => Some(Attribute::Any),
             (Attribute::NoValue, Attribute::Value(v)) => Some(Attribute::Value(*v)),
 
-            (Attribute::Any, Attribute::NoValue) => None,
-            (Attribute::Any, Attribute::Value(_)) => None,
+            (Attribute::Any, _) => None,
 
             (Attribute::Value(_), Attribute::NoValue) => None,
             (Attribute::Value(_), Attribute::Any) => Some(Attribute::Any),
-            (Attribute::Value(_), Attribute::Value(_)) => Some(Attribute::Any),
+            (Attribute::Value(_), Attribute::Value(_)) => Some(Attribute::Any), // Only if values
+            // aren't equal to each other
             _ => unreachable!(),
         }
     }

@@ -7,15 +7,11 @@ edition = "2021"
 
 [dependencies]
 csv = "1.1.6"
-strum = "0.24"
-strum_macros = "0.24"
 clap = { version = "4.0.28", features = ["derive"] }
 serde = { version = "1.0.148", features = ["derive"] }
 serde_yaml = "0.9.14"
 log = "0.4.17"
 pretty_env_logger = "0.4"
-cap = "0.1.1"
-radix_trie = "0.2.1"
 derivative = "2.2.0"
 itertools = "0.10.5"
 
