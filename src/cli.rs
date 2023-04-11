@@ -14,7 +14,7 @@ pub struct Cli {
     #[arg(
         short,
         long,
-        help = "Path to the dataset metadata file. Contains data surrounding ",
+        help = "Path to a YAML-formatted dataset metadata file. Contains metadata describing the dataset itself.",
         value_parser = parse_dataset_metadata
     )]
     pub dataset_metadata: DatasetMetadata,
