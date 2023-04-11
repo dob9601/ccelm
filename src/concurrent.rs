@@ -1,10 +1,11 @@
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 use itertools::Itertools;
 
 use crate::reader::DatasetMetadata;
 use crate::solver::Solver;
-use crate::{TrainingExample, ComputedBoundaries, Hypothesis};
+use crate::{ComputedBoundaries, TrainingExample};
 
 pub struct ConcurrentSolver<'a> {
     solvers: Vec<Solver<'a>>,
@@ -33,17 +34,23 @@ impl<'a> ConcurrentSolver<'a> {
     }
 
     pub fn solve(self) -> thread::Result<ComputedBoundaries<'a>> {
-        let mut specific_boundary: Vec<Hypothesis> = vec![];
-        let mut general_boundary: Vec<Hypothesis> = vec![];
+        let boundaries = Arc::new(Mutex::new(ComputedBoundaries {
+            specific_boundary: vec![],
+            general_boundary: vec![],
+        }));
 
         crossbeam::scope(|scope| {
             self.solvers.into_iter().for_each(|solver| {
-                scope.spawn(move |_| {
-                    solver.solve();
+                scope.spawn(|_| {
+                    let new_boundaries = solver.solve();
+
+                    boundaries.lock().unwrap().merge(new_boundaries);
                 });
             });
         })?;
-        todo!();
-        // Ok(())
+
+        let extracted_boundaries = std::mem::take(&mut *boundaries.lock().unwrap());
+
+        Ok(extracted_boundaries)
     }
 }

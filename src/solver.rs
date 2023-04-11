@@ -72,7 +72,7 @@ impl<'a> Solver<'a> {
         }
 
         ComputedBoundaries {
-            specific_boundary: self.specific_boundary,
+            specific_boundary: vec![self.specific_boundary],
             general_boundary: self.general_boundary,
         }
     }

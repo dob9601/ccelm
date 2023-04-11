@@ -19,8 +19,17 @@ mod solver;
 pub use solver::Solver;
 
 mod concurrent;
+pub use concurrent::ConcurrentSolver;
 
+#[derive(Default)]
 pub struct ComputedBoundaries<'a> {
-    pub specific_boundary: Hypothesis<'a>,
+    pub specific_boundary: Vec<Hypothesis<'a>>,
     pub general_boundary: Vec<Hypothesis<'a>>
+}
+
+impl<'a> ComputedBoundaries<'a> {
+    pub fn merge(&mut self, other: ComputedBoundaries<'a>) {
+        self.specific_boundary.extend(other.specific_boundary);
+        self.general_boundary.extend(other.general_boundary)
+    }
 }
