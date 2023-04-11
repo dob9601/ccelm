@@ -115,7 +115,7 @@ impl<'a> Hypothesis<'a> {
             .attributes
             .iter()
             .zip(training_example.attributes.iter())
-            .map(|(attribute, other_attribute)| attribute.generalize(other_attribute).unwrap_or(dbg!(attribute.clone())))
+            .map(|(attribute, other_attribute)| attribute.generalize(other_attribute).unwrap_or_else(|| attribute.clone()))
             .collect::<Vec<Attribute>>();
         Some(Self {
             attributes,
