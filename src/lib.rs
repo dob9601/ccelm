@@ -16,10 +16,11 @@ pub use reader::DatasetReader;
 pub mod hypothesis_space;
 
 mod solver;
+pub use solver::Solver;
 
 mod concurrent;
 
-struct ComputedBoundaries<'a> {
-    specific_boundary: Hypothesis<'a>,
-    general_boundary: Vec<Hypothesis<'a>>
+pub struct ComputedBoundaries<'a> {
+    pub specific_boundary: Hypothesis<'a>,
+    pub general_boundary: Vec<Hypothesis<'a>>
 }

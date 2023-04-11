@@ -4,7 +4,7 @@ use itertools::Itertools;
 
 use crate::reader::DatasetMetadata;
 use crate::solver::Solver;
-use crate::{TrainingExample, ComputedBoundaries};
+use crate::{TrainingExample, ComputedBoundaries, Hypothesis};
 
 pub struct ConcurrentSolver<'a> {
     solvers: Vec<Solver<'a>>,
@@ -33,8 +33,8 @@ impl<'a> ConcurrentSolver<'a> {
     }
 
     pub fn solve(self) -> thread::Result<ComputedBoundaries<'a>> {
-        let mut specific_boundaries = vec![];
-        let mut general_boundaries = vec![];
+        let mut specific_boundary: Vec<Hypothesis> = vec![];
+        let mut general_boundary: Vec<Hypothesis> = vec![];
 
         crossbeam::scope(|scope| {
             self.solvers.into_iter().for_each(|solver| {
@@ -43,6 +43,7 @@ impl<'a> ConcurrentSolver<'a> {
                 });
             });
         })?;
-        Ok(())
+        todo!();
+        // Ok(())
     }
 }
