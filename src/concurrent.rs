@@ -1,80 +1,84 @@
-use std::sync::{Arc, Mutex};
-use std::thread;
+use std::sync::mpsc;
 
 use itertools::Itertools;
+use log::{info, trace};
+use rayon::prelude::{IntoParallelRefMutIterator, ParallelIterator, IntoParallelIterator};
 
 use crate::reader::DatasetMetadata;
-use crate::solver::Solver;
-use crate::{ComputedBoundaries, TrainingExample};
+use crate::{ComputedBoundaries, Hypothesis, TrainingExample};
 
+#[derive(Clone, Debug)]
 pub struct ConcurrentSolver<'a> {
-    solvers: Vec<Solver<'a>>,
-    dataset_metadata: &'a DatasetMetadata,
+    pub specific_boundary: Hypothesis<'a>,
+    pub general_boundary: Vec<Hypothesis<'a>>,
     training_examples: Vec<TrainingExample>,
+    dataset_metadata: &'a DatasetMetadata,
 }
 
 impl<'a> ConcurrentSolver<'a> {
     pub fn new(
         training_examples: Vec<TrainingExample>,
         dataset_metadata: &'a DatasetMetadata,
-        n_solvers: Option<usize>,
     ) -> Self {
-        let n_solvers = match n_solvers {
-            Some(value) => value,
-            None => std::thread::available_parallelism().unwrap().into(),
-        };
-
-        let mut chunks: Vec<Vec<TrainingExample>> = vec![vec![]; n_solvers];
-
-        for (index, training_example) in training_examples.clone().into_iter().enumerate() {
-            let chunk_index = index % n_solvers;
-            chunks[chunk_index].push(training_example)
-        }
-
-        let solvers = chunks
-            .into_iter()
-            .map(|chunk| Solver::new(chunk, dataset_metadata))
-            .collect_vec();
-
+        let attribute_count = dataset_metadata.columns.len();
         Self {
-            solvers,
-            dataset_metadata,
+            specific_boundary: Hypothesis::specific(attribute_count, dataset_metadata),
+            general_boundary: vec![Hypothesis::general(attribute_count, dataset_metadata)],
             training_examples,
+            dataset_metadata,
         }
     }
 
-    pub fn solve(self) -> thread::Result<ComputedBoundaries<'a>> {
-        let boundaries = Arc::new(Mutex::new(ComputedBoundaries {
-            specific_boundary: None,
-            general_boundary: vec![],
-        }));
+    pub fn solve(mut self) -> ComputedBoundaries<'a> {
+        let n_training_examples = self.training_examples.len();
+        let column_data = &self.dataset_metadata.columns;
+        for (index, example) in self.training_examples.into_iter().enumerate() {
+            info!(
+                "{index}/{n_training_examples} | {} general hypotheses",
+                self.general_boundary.len()
+            );
 
-        crossbeam::scope(|scope| {
-            self.solvers.into_iter().for_each(|solver| {
-                scope.spawn(|_| {
-                    let new_boundaries = solver.solve();
+            if example.is_positive {
+                info!("Processing positive training example: {example}");
+                // Remove any hypothesis that is inconsistent with d
+                self.general_boundary
+                    .retain(|hypothesis| hypothesis.is_consistent(&example));
 
-                    boundaries.lock().unwrap().merge(new_boundaries);
-                });
-            });
-        })?;
+                trace!("Inconsistent hypotheses removed from general boundary");
 
-        let mut extracted_boundaries = std::mem::take(&mut *boundaries.lock().unwrap());
-        extracted_boundaries
-            .general_boundary
-            .retain(|h| self.training_examples.iter().all(|e| h.is_consistent(e)));
-        Ok(extracted_boundaries)
+                self.specific_boundary = self.specific_boundary.generalize(&example);
 
-        // let mut merged = extracted_boundaries.general_boundary.clone();
-        // merged.extend(extracted_boundaries.specific_boundary.clone());
-        // let examples = merged.into_iter().map(|h| TrainingExample::new(&h.attributes, true)).collect();
-        //
-        // let final_solver = Solver::new(dbg!(examples), self.dataset_metadata);
-        // Ok(final_solver.solve())
+                trace!("Specific hypothesis barrier refined");
+            } else {
+                info!("Processing negative training example: {example}");
+                // Remove any hypothesis that is inconsistent with d
+                // specific_hypothesis.retain(|hypothesis| hypothesis.is_consistent(&example));
 
-        // extracted_boundaries
-        //     .general_boundary
-        //     .retain(|hypothesis| hypothesis.is_consistent(&example));
-        // Ok(extracted_boundaries)
+                println!("{}", self.general_boundary.len());
+                self.general_boundary = self.general_boundary
+                    .into_par_iter()
+                    .flat_map(|hypothesis| {
+                        if hypothesis.is_consistent(&example) {
+                            vec![hypothesis.clone()]
+                        } else {
+                            let mut specializations =
+                                hypothesis.specialize(&example, column_data.as_slice());
+                            specializations.retain(|specialization| {
+                                specialization.is_more_general(&self.specific_boundary)
+                            });
+                            specializations
+                        }
+                    }).collect();
+
+                // self.general_boundary = receiver.iter().collect_vec();
+            }
+
+            info!("Successfully processed example");
+        }
+
+        ComputedBoundaries {
+            specific_boundary: Some(self.specific_boundary),
+            general_boundary: self.general_boundary,
+        }
     }
 }

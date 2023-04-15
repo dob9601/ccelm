@@ -5,7 +5,6 @@ mod attribute;
 pub use attribute::Attribute;
 
 mod training_example;
-use itertools::Itertools;
 pub use training_example::TrainingExample;
 
 mod cli;
@@ -19,8 +18,8 @@ pub mod hypothesis_space;
 mod solver;
 pub use solver::Solver;
 
-mod concurrent_rayon;
-pub use concurrent_rayon::ConcurrentSolver;
+mod concurrent;
+pub use concurrent::ConcurrentSolver;
 
 #[derive(Default)]
 pub struct ComputedBoundaries<'a> {
