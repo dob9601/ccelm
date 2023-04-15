@@ -23,7 +23,10 @@ pub struct Cli {
     pub output_path: Option<PathBuf>,
 
     #[arg(long, help = "Whether the file is delimited by tabs", required = false)]
-    pub tabs: bool
+    pub tabs: bool,
+
+    #[arg(long, help = "Whether to use the concurrent solver", required = false)]
+    pub concurrent: bool
 }
 
 fn parse_dataset_metadata(path: &str) -> Result<DatasetMetadata, Box<dyn Error + Sync + Send>> {

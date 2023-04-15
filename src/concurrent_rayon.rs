@@ -1,18 +1,21 @@
+use std::sync::{Mutex, mpsc};
+
 use itertools::Itertools;
 use log::{info, trace};
+use rayon::prelude::{ParallelIterator, IntoParallelIterator};
 
 use crate::reader::DatasetMetadata;
 use crate::{ComputedBoundaries, Hypothesis, TrainingExample};
 
 #[derive(Clone, Debug)]
-pub struct Solver<'a> {
+pub struct ConcurrentSolver<'a> {
     pub specific_boundary: Hypothesis<'a>,
     pub general_boundary: Vec<Hypothesis<'a>>,
     training_examples: Vec<TrainingExample>,
     dataset_metadata: &'a DatasetMetadata,
 }
 
-impl<'a> Solver<'a> {
+impl<'a> ConcurrentSolver<'a> {
     pub fn new(
         training_examples: Vec<TrainingExample>,
         dataset_metadata: &'a DatasetMetadata,
@@ -49,24 +52,25 @@ impl<'a> Solver<'a> {
             } else {
                 info!("Processing negative training example: {example}");
                 // Remove any hypothesis that is inconsistent with d
-                //specific_hypothesis.retain(|hypothesis| hypothesis.is_consistent(&example));
+                // specific_hypothesis.retain(|hypothesis| hypothesis.is_consistent(&example));
 
-                let mut new_hypotheses = vec![];
-                for hypothesis in self.general_boundary.into_iter() {
+                let (sender, receiver) = mpsc::channel();
+
+                println!("{}", self.general_boundary.len());
+                self.general_boundary.into_par_iter().for_each_with(sender, |s, hypothesis| {
                     if hypothesis.is_consistent(&example) {
-                        new_hypotheses.push(hypothesis);
-                        continue;
+                        s.send(hypothesis).unwrap();
+                    } else {
+                        let mut specializations =
+                            hypothesis.specialize(&example, column_data.as_slice());
+                        specializations.retain(|specialization| {
+                            specialization.is_more_general(&self.specific_boundary)
+                        });
+                        specializations.into_iter().for_each(|specialization| s.send(specialization).unwrap())
                     }
+                });
 
-                    let mut specializations =
-                        hypothesis.specialize(&example, column_data.as_slice());
-                    specializations.retain(|specialization| {
-                        specialization.is_more_general(&self.specific_boundary)
-                    });
-                    new_hypotheses.extend(specializations);
-                }
-
-                self.general_boundary = new_hypotheses;
+                self.general_boundary = receiver.iter().collect_vec();
             }
 
             info!("Successfully processed example");

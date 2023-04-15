@@ -18,7 +18,7 @@ pub struct Hypothesis<'a> {
         PartialOrd = "ignore",
         Hash = "ignore"
     )]
-    dataset_metadata: &'a DatasetMetadata,
+    pub dataset_metadata: &'a DatasetMetadata,
 }
 
 // FIXME: Should hypothesis be renamed to training example? Actual hypotheses all seem to be true
@@ -100,6 +100,23 @@ impl<'a> Hypothesis<'a> {
             })
     }
 
+    pub fn is_more_specific(&self, other: &Self) -> bool {
+        self.attributes
+            .iter()
+            .zip(other.attributes.iter())
+            .all(|(attribute, other_attribute)| {
+                if let (Attribute::Value(left), Attribute::Value(right)) =
+                    (attribute, other_attribute)
+                {
+                    // If both are values, can only be more general (or equal) if attributes are
+                    // the same
+                    left == right
+                } else {
+                    attribute <= other_attribute
+                }
+            })
+    }
+
     // FIXME: Replace this with a classify function. Hypothesis is consistent if it correctly
     // classifies the other hypothesis
     pub fn is_consistent(&self, training_example: &TrainingExample) -> bool {
@@ -110,17 +127,21 @@ impl<'a> Hypothesis<'a> {
     }
 
     /// Return the most minimal generalization that is consistent with the new training example
-    pub fn generalize(&self, training_example: &TrainingExample) -> Option<Self> {
+    pub fn generalize(&self, training_example: &TrainingExample) -> Self {
         let attributes = self
             .attributes
             .iter()
             .zip(training_example.attributes.iter())
-            .map(|(attribute, other_attribute)| attribute.generalize(other_attribute).unwrap_or_else(|| attribute.clone()))
+            .map(|(attribute, other_attribute)| {
+                attribute
+                    .generalize(other_attribute)
+                    .unwrap_or_else(|| attribute.clone())
+            })
             .collect::<Vec<Attribute>>();
-        Some(Self {
+        Self {
             attributes,
             dataset_metadata: self.dataset_metadata,
-        })
+        }
     }
 
     /// Return the most minimal specialization that is consistent with both hypotheses

@@ -3,6 +3,7 @@ use std::str::{FromStr, ParseBoolError};
 
 use crate::attribute::Attribute;
 use crate::reader::DatasetMetadata;
+use crate::Hypothesis;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TrainingExample {
@@ -10,7 +11,15 @@ pub struct TrainingExample {
     pub is_positive: bool,
 }
 
-// FIXME: Should hypothesis be renamed to training example? Actual hypotheses all seem to be true
+impl From<Hypothesis<'_>> for TrainingExample {
+    fn from(hypothesis: Hypothesis<'_>) -> Self {
+        TrainingExample {
+            attributes: hypothesis.attributes,
+            is_positive: true,
+        }
+    }
+}
+
 impl TrainingExample {
     pub fn new(attributes: &[Attribute], is_positive: bool) -> Self {
         Self {
@@ -32,7 +41,10 @@ impl TrainingExample {
         bytes
     }
 
-    pub fn from_str(record: &str, dataset_metadata: &DatasetMetadata) -> Result<Self, ParseBoolError> {
+    pub fn from_str(
+        record: &str,
+        dataset_metadata: &DatasetMetadata,
+    ) -> Result<Self, ParseBoolError> {
         let record: Vec<&str> = record.split(',').map(|str| str.trim()).collect();
         let attributes: Vec<Attribute> = record[..record.len() - 1]
             .iter()
@@ -71,11 +83,7 @@ mod tests {
     #[test]
     fn test_row_serialization() {
         let row = TrainingExample {
-            attributes: vec![
-                Attribute::NoValue,
-                Attribute::Any,
-                Attribute::Value(0),
-            ],
+            attributes: vec![Attribute::NoValue, Attribute::Any, Attribute::Value(0)],
             is_positive: true,
         };
         let mut writer = csv::Writer::from_writer(vec![]);

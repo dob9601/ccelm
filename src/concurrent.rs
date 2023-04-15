@@ -9,18 +9,24 @@ use crate::{ComputedBoundaries, TrainingExample};
 
 pub struct ConcurrentSolver<'a> {
     solvers: Vec<Solver<'a>>,
+    dataset_metadata: &'a DatasetMetadata,
+    training_examples: Vec<TrainingExample>,
 }
 
 impl<'a> ConcurrentSolver<'a> {
     pub fn new(
         training_examples: Vec<TrainingExample>,
         dataset_metadata: &'a DatasetMetadata,
+        n_solvers: Option<usize>,
     ) -> Self {
-        let n_solvers = std::thread::available_parallelism().unwrap();
+        let n_solvers = match n_solvers {
+            Some(value) => value,
+            None => std::thread::available_parallelism().unwrap().into(),
+        };
 
-        let mut chunks: Vec<Vec<TrainingExample>> = vec![vec![]; n_solvers.into()];
+        let mut chunks: Vec<Vec<TrainingExample>> = vec![vec![]; n_solvers];
 
-        for (index, training_example) in training_examples.into_iter().enumerate() {
+        for (index, training_example) in training_examples.clone().into_iter().enumerate() {
             let chunk_index = index % n_solvers;
             chunks[chunk_index].push(training_example)
         }
@@ -30,12 +36,16 @@ impl<'a> ConcurrentSolver<'a> {
             .map(|chunk| Solver::new(chunk, dataset_metadata))
             .collect_vec();
 
-        Self { solvers }
+        Self {
+            solvers,
+            dataset_metadata,
+            training_examples,
+        }
     }
 
     pub fn solve(self) -> thread::Result<ComputedBoundaries<'a>> {
         let boundaries = Arc::new(Mutex::new(ComputedBoundaries {
-            specific_boundary: vec![],
+            specific_boundary: None,
             general_boundary: vec![],
         }));
 
@@ -49,8 +59,22 @@ impl<'a> ConcurrentSolver<'a> {
             });
         })?;
 
-        let extracted_boundaries = std::mem::take(&mut *boundaries.lock().unwrap());
-
+        let mut extracted_boundaries = std::mem::take(&mut *boundaries.lock().unwrap());
+        extracted_boundaries
+            .general_boundary
+            .retain(|h| self.training_examples.iter().all(|e| h.is_consistent(e)));
         Ok(extracted_boundaries)
+
+        // let mut merged = extracted_boundaries.general_boundary.clone();
+        // merged.extend(extracted_boundaries.specific_boundary.clone());
+        // let examples = merged.into_iter().map(|h| TrainingExample::new(&h.attributes, true)).collect();
+        //
+        // let final_solver = Solver::new(dbg!(examples), self.dataset_metadata);
+        // Ok(final_solver.solve())
+
+        // extracted_boundaries
+        //     .general_boundary
+        //     .retain(|hypothesis| hypothesis.is_consistent(&example));
+        // Ok(extracted_boundaries)
     }
 }
