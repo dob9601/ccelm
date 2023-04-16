@@ -18,3 +18,4 @@ columns:
   -
     - Same
     - Change
+delimiter: ","

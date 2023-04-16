@@ -188,3 +188,4 @@ columns: # A more compact representation might be good
   - - "+"
     - "-"
 any_value_string: "0"
+delimiter: "	"
