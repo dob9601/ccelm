@@ -37,5 +37,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         boundaries.general_boundary.len()
     );
 
+    if let Some(path) = cli.output_path {
+        let contents = format!(
+            "----------Specific Boundary----------\n{}\n\n----------General Boundary----------\n{}",
+            boundaries.specific_boundary.unwrap(),
+            boundaries.general_boundary.into_iter().join("\n")
+        );
+
+        std::fs::write(path, contents).unwrap();
+    }
+
     Ok(())
 }
