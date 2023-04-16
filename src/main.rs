@@ -12,15 +12,15 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let cli = Cli::parse();
 
-    let reader = DatasetReader::new(cli.input_dataset, cli.dataset_metadata.clone())?;
+    let reader = DatasetReader::new(cli.dataset, cli.metadata.clone())?;
 
     let training_examples = reader.collect::<Result<Vec<TrainingExample>, Box<dyn Error>>>()?;
 
     let boundaries = if cli.concurrent {
-        let solver = ConcurrentSolver::new(training_examples, &cli.dataset_metadata); //, Some(1));
+        let solver = ConcurrentSolver::new(training_examples, &cli.metadata); //, Some(1));
         solver.solve()
     } else {
-        let solver = Solver::new(training_examples, &cli.dataset_metadata); //, Some(1));
+        let solver = Solver::new(training_examples, &cli.metadata); //, Some(1));
         solver.solve()
     };
 

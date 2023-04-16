@@ -55,7 +55,11 @@ impl Attribute {
             .unwrap()
     }
 
-    pub fn to_valued_string(&self, column_index: usize, dataset_metadata: &DatasetMetadata) -> String {
+    pub fn to_valued_string(
+        &self,
+        column_index: usize,
+        dataset_metadata: &DatasetMetadata,
+    ) -> String {
         if let Self::Value(value) = self {
             dataset_metadata.columns[column_index][usize::from(*value)].clone()
         } else {
