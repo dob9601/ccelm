@@ -12,9 +12,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let cli = Cli::parse();
 
-    let delimiter = if cli.tabs { b'\t' } else { b',' };
-
-    let reader = DatasetReader::new(cli.input_dataset, cli.dataset_metadata.clone(), delimiter)?;
+    let reader = DatasetReader::new(cli.input_dataset, cli.dataset_metadata.clone())?;
 
     let training_examples = reader.collect::<Result<Vec<TrainingExample>, Box<dyn Error>>>()?;
 

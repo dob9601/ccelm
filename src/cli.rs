@@ -22,9 +22,6 @@ pub struct Cli {
     #[arg(short, long, help = "Path to output all valid hypotheses to")]
     pub output_path: Option<PathBuf>,
 
-    #[arg(long, help = "Whether the file is delimited by tabs", required = false)]
-    pub tabs: bool,
-
     #[arg(long, help = "Whether to use the concurrent solver", required = false)]
     pub concurrent: bool
 }

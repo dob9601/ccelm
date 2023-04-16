@@ -1,8 +1,5 @@
-use std::sync::mpsc;
-
-use itertools::Itertools;
 use log::{info, trace};
-use rayon::prelude::{IntoParallelRefMutIterator, ParallelIterator, IntoParallelIterator};
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 
 use crate::reader::DatasetMetadata;
 use crate::{ComputedBoundaries, Hypothesis, TrainingExample};
@@ -21,6 +18,7 @@ impl<'a> ConcurrentSolver<'a> {
         dataset_metadata: &'a DatasetMetadata,
     ) -> Self {
         let attribute_count = dataset_metadata.columns.len();
+
         Self {
             specific_boundary: Hypothesis::specific(attribute_count, dataset_metadata),
             general_boundary: vec![Hypothesis::general(attribute_count, dataset_metadata)],
@@ -41,8 +39,12 @@ impl<'a> ConcurrentSolver<'a> {
             if example.is_positive {
                 info!("Processing positive training example: {example}");
                 // Remove any hypothesis that is inconsistent with d
-                self.general_boundary
-                    .retain(|hypothesis| hypothesis.is_consistent(&example));
+                self.general_boundary = self
+                    .general_boundary
+                    .into_par_iter()
+                    .filter(|h| h.is_consistent(&example))
+                    .collect();
+                // .retain(|hypothesis| hypothesis.is_consistent(&example));
 
                 trace!("Inconsistent hypotheses removed from general boundary");
 
@@ -54,23 +56,20 @@ impl<'a> ConcurrentSolver<'a> {
                 // Remove any hypothesis that is inconsistent with d
                 // specific_hypothesis.retain(|hypothesis| hypothesis.is_consistent(&example));
 
-                println!("{}", self.general_boundary.len());
-                self.general_boundary = self.general_boundary
+                self.general_boundary = self
+                    .general_boundary
                     .into_par_iter()
-                    .flat_map(|hypothesis| {
+                    .flat_map_iter(|hypothesis| {
                         if hypothesis.is_consistent(&example) {
-                            vec![hypothesis.clone()]
+                            vec![hypothesis]
                         } else {
-                            let mut specializations =
+                            let specializations =
                                 hypothesis.specialize(&example, column_data.as_slice());
-                            specializations.retain(|specialization| {
-                                specialization.is_more_general(&self.specific_boundary)
-                            });
+
                             specializations
                         }
-                    }).collect();
-
-                // self.general_boundary = receiver.iter().collect_vec();
+                    })
+                    .collect();
             }
 
             info!("Successfully processed example");

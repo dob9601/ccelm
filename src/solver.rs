@@ -1,4 +1,3 @@
-use itertools::Itertools;
 use log::{info, trace};
 
 use crate::reader::DatasetMetadata;

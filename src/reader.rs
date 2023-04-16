@@ -17,12 +17,11 @@ impl DatasetReader {
     pub fn new<P: AsRef<Path>>(
         dataset_path: P,
         metadata: DatasetMetadata,
-        delimiter: u8,
     ) -> Result<Self, csv::Error> {
         Ok(Self {
             reader: csv::ReaderBuilder::new()
                 .trim(csv::Trim::All)
-                .delimiter(delimiter)
+                .delimiter(metadata.delimiter.try_into().unwrap())
                 .from_path(dataset_path)?,
             metadata,
         })
@@ -73,6 +72,8 @@ impl Iterator for DatasetReader {
 pub struct DatasetMetadata {
     pub columns: Vec<Vec<String>>,
 
+    pub delimiter: char,
+
     #[serde(default = "no_value_string_default")]
     pub no_value_string: String,
 
@@ -93,11 +94,13 @@ impl DatasetMetadata {
         columns: Vec<Vec<String>>,
         no_value_string: Option<String>,
         any_value_string: Option<String>,
+        delimiter: char,
     ) -> Self {
         Self {
             columns,
             no_value_string: no_value_string.unwrap_or_else(no_value_string_default),
             any_value_string: any_value_string.unwrap_or_else(any_value_string_default),
+            delimiter,
         }
     }
 }
