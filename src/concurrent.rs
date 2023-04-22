@@ -1,83 +1,93 @@
 use log::{info, trace};
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
+use rayon::{ThreadPool, ThreadPoolBuilder};
 
 use crate::reader::DatasetMetadata;
 use crate::{ComputedBoundaries, Hypothesis, TrainingExample};
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ConcurrentSolver<'a> {
     pub specific_boundary: Hypothesis<'a>,
     pub general_boundary: Vec<Hypothesis<'a>>,
     training_examples: Vec<TrainingExample>,
     dataset_metadata: &'a DatasetMetadata,
+    threadpool: ThreadPool,
 }
 
 impl<'a> ConcurrentSolver<'a> {
     pub fn new(
         training_examples: Vec<TrainingExample>,
         dataset_metadata: &'a DatasetMetadata,
+        n_threads: usize,
     ) -> Self {
         let attribute_count = dataset_metadata.columns.len();
+        let threadpool = ThreadPoolBuilder::new()
+            .num_threads(n_threads)
+            .build()
+            .unwrap();
 
         Self {
             specific_boundary: Hypothesis::specific(attribute_count, dataset_metadata),
             general_boundary: vec![Hypothesis::general(attribute_count, dataset_metadata)],
             training_examples,
             dataset_metadata,
+            threadpool,
         }
     }
 
     pub fn solve(mut self) -> ComputedBoundaries<'a> {
-        let n_training_examples = self.training_examples.len();
-        let column_data = &self.dataset_metadata.columns;
-        for (index, example) in self.training_examples.into_iter().enumerate() {
-            info!(
-                "{index}/{n_training_examples} | {} general hypotheses",
-                self.general_boundary.len()
-            );
+        self.threadpool.scope(|_| {
+            let n_training_examples = self.training_examples.len();
+            let column_data = &self.dataset_metadata.columns;
+            for (index, example) in self.training_examples.into_iter().enumerate() {
+                info!(
+                    "{index}/{n_training_examples} | {} general hypotheses",
+                    self.general_boundary.len()
+                );
 
-            if example.is_positive {
-                info!("Processing positive training example: {example}");
-                // Remove any hypothesis that is inconsistent with d
-                self.general_boundary = self
-                    .general_boundary
-                    .into_par_iter()
-                    .filter(|h| h.is_consistent(&example))
-                    .collect();
-                // .retain(|hypothesis| hypothesis.is_consistent(&example));
+                if example.is_positive {
+                    info!("Processing positive training example: {example}");
+                    // Remove any hypothesis that is inconsistent with d
+                    self.general_boundary = self
+                        .general_boundary
+                        .into_par_iter()
+                        .filter(|h| h.is_consistent(&example))
+                        .collect();
+                    // .retain(|hypothesis| hypothesis.is_consistent(&example));
 
-                trace!("Inconsistent hypotheses removed from general boundary");
+                    trace!("Inconsistent hypotheses removed from general boundary");
 
-                self.specific_boundary = self.specific_boundary.generalize(&example);
+                    self.specific_boundary = self.specific_boundary.generalize(&example);
 
-                trace!("Specific hypothesis barrier refined");
-            } else {
-                info!("Processing negative training example: {example}");
-                // Remove any hypothesis that is inconsistent with d
-                // specific_hypothesis.retain(|hypothesis| hypothesis.is_consistent(&example));
+                    trace!("Specific hypothesis barrier refined");
+                } else {
+                    info!("Processing negative training example: {example}");
+                    // Remove any hypothesis that is inconsistent with d
+                    // specific_hypothesis.retain(|hypothesis| hypothesis.is_consistent(&example));
 
-                self.general_boundary = self
-                    .general_boundary
-                    .into_par_iter()
-                    .flat_map_iter(|hypothesis| {
-                        if hypothesis.is_consistent(&example) {
-                            vec![hypothesis]
-                        } else {
-                            let specializations =
-                                hypothesis.specialize(&example, column_data.as_slice());
+                    self.general_boundary = self
+                        .general_boundary
+                        .into_par_iter()
+                        .flat_map_iter(|hypothesis| {
+                            if hypothesis.is_consistent(&example) {
+                                vec![hypothesis]
+                            } else {
+                                let specializations =
+                                    hypothesis.specialize(&example, column_data.as_slice());
 
-                            specializations
-                        }
-                    })
-                    .collect();
+                                specializations
+                            }
+                        })
+                        .collect();
+                }
+
+                info!("Successfully processed example");
             }
 
-            info!("Successfully processed example");
-        }
-
-        ComputedBoundaries {
-            specific_boundary: Some(self.specific_boundary),
-            general_boundary: self.general_boundary,
-        }
+            ComputedBoundaries {
+                specific_boundary: Some(self.specific_boundary),
+                general_boundary: self.general_boundary,
+            }
+        })
     }
 }

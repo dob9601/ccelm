@@ -17,7 +17,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let training_examples = reader.collect::<Result<Vec<TrainingExample>, Box<dyn Error>>>()?;
 
     let boundaries = if cli.concurrent {
-        let solver = ConcurrentSolver::new(training_examples, &cli.metadata); //, Some(1));
+        let solver = ConcurrentSolver::new(training_examples, &cli.metadata, cli.threads); //, Some(1));
         solver.solve()
     } else {
         let solver = Solver::new(training_examples, &cli.metadata); //, Some(1));
