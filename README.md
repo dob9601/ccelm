@@ -24,6 +24,8 @@ Since the tool isn't currently published to [crates.io](https://crates.io), the 
 cargo install --path .
 ```
 
+Assuming cargo has been configured correctly, this will add the `ccelm` command to your path. Instructions on how to use the command can be found through `ccelm --help`. Examples of configured datasets can be found in `data/`.
+
 Pre-built binaries are also currently unavailable.
 
 ## Included Data
