@@ -14,6 +14,18 @@ The main advantage candidate elimination has over other more modern approaches i
 
 <a title="Dfass, Public domain, via Wikimedia Commons" href="https://commons.wikimedia.org/wiki/File:Version_space.png"><img alt="Version space" src="https://upload.wikimedia.org/wikipedia/commons/3/33/Version_space.png"></a>
 
+## Installing the Tool
+
+The tool can be installed using [cargo](https://doc.rust-lang.org/cargo/), the package manager installed as part of the rust toolchain.
+
+Since the tool isn't currently published to [crates.io](https://crates.io), the easiest way to get it running is to `cd` into a cloned version of the repository and run:
+
+```bash
+cargo install --path .
+```
+
+Pre-built binaries are also currently unavailable.
+
 ## Included Data
 
 This repository includes data adapted from the paper [At the Boundaries of Syntactic Prehistory](https://royalsocietypublishing.org/doi/10.1098/rstb.2020.0197). The original data can be found [on GitHub](https://github.com/AndreaCeolin/Boundaries).
