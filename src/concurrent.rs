@@ -72,8 +72,12 @@ impl<'a> ConcurrentSolver<'a> {
                             if hypothesis.is_consistent(&example) {
                                 vec![hypothesis]
                             } else {
-                                let specializations =
+                                let mut specializations =
                                     hypothesis.specialize(&example, column_data.as_slice());
+
+                                specializations.retain(|specialization| {
+                                    specialization.is_more_general(&self.specific_boundary)
+                                });
 
                                 specializations
                             }
@@ -83,6 +87,13 @@ impl<'a> ConcurrentSolver<'a> {
 
                 info!("Successfully processed example");
             }
+
+            let cloned_boundary = self.general_boundary.clone();
+            self.general_boundary.retain(|hypothesis| {
+                cloned_boundary
+                    .iter()
+                    .all(|other| hypothesis == other || !hypothesis.is_more_general(other))
+            });
 
             ComputedBoundaries {
                 specific_boundary: Some(self.specific_boundary),

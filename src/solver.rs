@@ -71,6 +71,13 @@ impl<'a> Solver<'a> {
             info!("Successfully processed example");
         }
 
+        let cloned_boundary = self.general_boundary.clone();
+        self.general_boundary.retain(|hypothesis| {
+            cloned_boundary
+                .iter()
+                .all(|other| hypothesis == other || !hypothesis.is_more_general(other))
+        });
+
         ComputedBoundaries {
             specific_boundary: Some(self.specific_boundary),
             general_boundary: self.general_boundary,
